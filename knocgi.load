@@ -1,0 +1,3 @@
+<IfModule !knocgi_module>
+  LoadModule knocgi_module      /usr/lib/apache2/modules/mod_knocgi.so
+</IfModule>
