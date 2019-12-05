@@ -7,7 +7,7 @@ mod_knocgi.so: mod_knocgi.c fileinfo makefile
 		> mod_knocgi_fileinfo.h
 	${APXS} -DDEBUG_KNOCGI=$(DEBUG_KNOCGI) -c mod_knocgi.c
 
-mod_knocgi: src/apache2/mod_knocgi.so
+mod_knocgi: mod_knocgi.so
 
 fileinfo: etc/fileinfo.c
 	$(CC) -o fileinfo etc/fileinfo.c

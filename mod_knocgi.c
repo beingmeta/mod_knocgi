@@ -1,3 +1,4 @@
+
 /* C Mode */
 
 /* mod_knocgi.c
@@ -20,6 +21,9 @@
 #include "unixd.h"
 #include "mpm_common.h"
 #include "netdb.h"
+
+#include <libu8/libu8.h>
+#include <libu8/u8netfns.h>
 
 #include <ctype.h>
 
@@ -51,13 +55,10 @@
 #define DEBUG_SOCKETS DEBUG_ALL
 #endif
 
-#define LOGNOTICE APLOG_NOTICE
-#define LOGINFO APLOG_INFO
-
 #if DEBUG_KNOWEB
-#define LOGDEBUG APLOG_INFO
+#define LOGDBUG APLOG_INFO
 #else
-#define LOGDEBUG APLOG_DEBUG
+#define LOGDBUG APLOG_DEBUG
 #endif
 
 #if DEBUG_SOCKETS
@@ -160,12 +161,10 @@ static apr_pool_t *kno_pool;
 typedef enum { filesock, aprsock, badsock=0 } knosocktype;
 
 typedef struct KNO_SOCKET {
-  knosocktype socktype;
   const char *sockname;
   struct KNO_SERVLET *servlet;
   int socket_index, busy, closed;
-  union { int fd; apr_socket_t *apr;}
-    conn;}
+  union {u8_socket fd;} conn;}
   KNO_SOCKET;
 typedef struct KNO_SOCKET *knosocket;
 
@@ -222,7 +221,7 @@ static void init_version_info()
 
 /* Compatibility and utilities */
 
-#define APLOG_HEAD APLOG_MARK,LOGDEBUG,OK
+#define APLOG_HEAD APLOG_MARK,LOGDBUG,OK
 #define ap_can_exec(file) (1)
 #define ap_send_http_header(r) ;
 #define ap_reset_timeout(r) ;
@@ -274,7 +273,7 @@ static int stat_can_writep(apr_pool_t *p,server_rec *s,apr_finfo_t *finfo)
   apr_uid_t uid; apr_gid_t gid;
   apr_uid_current(&uid,&gid,p);
   ap_log_error
-    (APLOG_MARK,LOGDEBUG,OK,s,
+    (APLOG_MARK,LOGDBUG,OK,s,
      "Checking writability of %s with uid=%d gid=%d",
      ((finfo->fname) ? (finfo->fname) : (finfo->name)),
      uid,gid);
@@ -296,11 +295,11 @@ static int file_existsp(apr_pool_t *p,const char *filename)
 static int file_writablep(apr_pool_t *p,server_rec *s,const char *filename)
 {
   fileinfo finfo; int retval;
-  ap_log_error(APLOG_MARK,LOGDEBUG,OK,s,
+  ap_log_error(APLOG_MARK,LOGDBUG,OK,s,
 	       "Checking writability of file %s",filename);
   retval=get_file_info(p,filename,&finfo);
   if (retval) {
-    ap_log_error(APLOG_MARK,LOGDEBUG,retval,s,
+    ap_log_error(APLOG_MARK,LOGDBUG,retval,s,
 		 "stat failed for %s",filename);
     filename=ap_make_dirstr_parent(p,filename);
     retval=apr_stat(&finfo,filename,FINFO_FLAGS,p);
@@ -309,21 +308,27 @@ static int file_writablep(apr_pool_t *p,server_rec *s,const char *filename)
 		   "stat failed for %s",filename);
       return 0;}}
   if (stat_can_writep(p,s,&finfo)) {
-    ap_log_error(APLOG_MARK,LOGDEBUG,retval,s,
+    ap_log_error(APLOG_MARK,LOGDBUG,retval,s,
 		 "found file writable: %s",filename);
     return 1;}
   else return 0;
 }
 
+static int file_socketp(const char *spec)
+{
+  if ( (strchr(spec,':')) || (strchr(spec,'@')) )
+    return 0;
+  else return 1;
+}
 static int file_socket_existsp(apr_pool_t *p,server_rec *s,const char *filename)
 {
   fileinfo finfo; int retval;
-  ap_log_error(APLOG_MARK,LOGDEBUG,OK,s,
+  ap_log_error(APLOG_MARK,LOGDBUG,OK,s,
 	       "Checking existence of file %s",filename);
   retval=get_file_info(p,filename,&finfo);
   if (retval) return 0;
   else if (stat_can_writep(p,s,&finfo)) {
-    ap_log_error(APLOG_MARK,LOGDEBUG,retval,s,
+    ap_log_error(APLOG_MARK,LOGDBUG,retval,s,
 		 "found file writable: %s",filename);
     return 1;}
   else return 0;
@@ -413,7 +418,7 @@ static const char *get_sockname(request_rec *r)
        not used when we explicitly set socket locations. */
     
     ap_log_rerror
-      (APLOG_MARK,LOGDEBUG,OK,r,
+      (APLOG_MARK,LOGDBUG,OK,r,
        "KNO get_sockname socket_location='%s', socket_prefix='%s', isdir=%d",
        socket_location,socket_prefix,
        isdirectoryp(r->pool,socket_prefix));
@@ -1497,7 +1502,7 @@ static int start_servlet(request_rec *r,kno_servlet s,
     char buf[PATH_MAX], *cwd = getcwd(buf,sizeof(buf));
     if (dir == NULL)
       dir = ap_make_dirstr_parent(p,r->filename);
-    ap_log_error(APLOG_MARK, LOGDEBUG, OK, server,
+    ap_log_error(APLOG_MARK, LOGDBUG, OK, server,
 		 "Child directory should be %s, cwd=%s",dir,cwd);
     rv = apr_procattr_dir_set(attr,dir);
     if (rv != APR_SUCCESS) {
@@ -1534,10 +1539,10 @@ static int start_servlet(request_rec *r,kno_servlet s,
 
   {const char **scanner=argv; while (scanner<write_argv) {
       if ((envp) && (scanner>=envp))
-	ap_log_error(APLOG_MARK, LOGDEBUG, OK, server,
+	ap_log_error(APLOG_MARK, LOGDBUG, OK, server,
 		     "%s ENV[%ld]='%s'",
 		     exename,((long int)(scanner-argv)),*scanner);
-      else ap_log_error(APLOG_MARK, LOGDEBUG, OK, server,
+      else ap_log_error(APLOG_MARK, LOGDBUG, OK, server,
 			"%s ARG[%ld]='%s'",
 			exename,((long int)(scanner-argv)),*scanner);
       scanner++;}}
@@ -1725,75 +1730,31 @@ static kno_servlet add_servlet(struct request_rec *r,const char *sockname,
 		   max_servlets,sockname);
       apr_thread_mutex_unlock(servlets_lock);
       return NULL;}}
-  {
-    /* Now, we create the servlet entry itself */
-    int isfilesock=((sockname)&&
-		    ((strchr(sockname,'@'))==NULL)&&
-		    ((strchr(sockname,'/')!=NULL)||
-		     ((strchr(sockname,':'))==NULL)));
-    kno_servlet servlet=&(servlets[i]);
-    ap_log_error(APLOG_MARK,APLOG_NOTICE,OK,r->server,
-		 "Adding new servlet for %s at #%d, keep=%d, max=%d",
-		 sockname,i,keep_socks,max_socks);
-    memset(servlet,0,sizeof(struct KNO_SERVLET));
-    servlet->sockname=apr_pstrdup(kno_pool,sockname);
-    servlet->server=r->server; servlet->servlet_index=i;
-    servlet->spawning=0; servlet->spawned=0;
-    /* Initialize type and address/endpoint fields */
-    if (isfilesock) {
-      servlet->socktype=filesock;
-      servlet->endpoint.path.sun_family=AF_LOCAL;
-      strcpy(servlet->endpoint.path.sun_path,sockname);}
-    else {
-      apr_status_t retval;
-      apr_sockaddr_t *addr;
-      char *rname;
-      char hostname[128]; int portno=-1;
-      char *split=strchr(sockname,'@');
-      servlet->socktype=aprsock;
-      if (split) {
-	char portbuf[32];
-	strcpy(hostname,split+1);
-	strncpy(portbuf,sockname,split-sockname);
-	portbuf[split-sockname]='\0';
-	portno=atoi(portbuf);}
-      else if ((split=strchr(sockname,':'))) {
-	strncpy(hostname,sockname,split-sockname);
-	hostname[split-sockname]='\0';
-	portno=atoi(split+1);}
-      else {}
-      ap_log_rerror
-	(APLOG_MARK,APLOG_DEBUG,OK,r,
-	 "sockname=%s, hostname=%s, portno=%d",
-	 sockname,hostname,portno);
-      if (portno<0) {
-	ap_log_rerror
-	  (APLOG_MARK,APLOG_WARNING,OK,r,
-	   "Unable to determine port from %s",sockname);
-	apr_thread_mutex_unlock(servlets_lock);
-	return NULL;}
-      retval=apr_sockaddr_info_get
-	(&(servlet->endpoint.addr),hostname,
-	 APR_UNSPEC,(short)portno,0,kno_pool);
-      if (retval!=APR_SUCCESS) {
-	ap_log_rerror
-	  (APLOG_MARK,APLOG_WARNING,OK,r,
-	   "Unable to resolve connection info for port %d at %s",
-	   portno,sockname);
-	apr_thread_mutex_unlock(servlets_lock);
-	return NULL;}}
-    apr_thread_mutex_create(&(servlet->lock),
-			    APR_THREAD_MUTEX_DEFAULT,kno_pool);
-    servlet->max_socks=max_socks;
-    if (keep_socks>=0) {
-      servlet_set_keep_socks(servlet,keep_socks);}
-    else {servlet->sockets=NULL; servlet->keep_socks=-1;}
-    servlet->n_socks=0;
-    servlet->n_busy=0;
-    servlet->n_ephemeral=0;
-    n_servlets++;
-    apr_thread_mutex_unlock(servlets_lock);
-    return servlet;}
+  /* Now, we create the servlet entry itself */
+  kno_servlet servlet=&(servlets[i]);
+  ap_log_error(APLOG_MARK,APLOG_NOTICE,OK,r->server,
+	       "Adding new servlet for %s at #%d, keep=%d, max=%d",
+	       sockname,i,keep_socks,max_socks);
+  memset(servlet,0,sizeof(struct KNO_SERVLET));
+  servlet->sockname=apr_pstrdup(kno_pool,sockname);
+  servlet->server=r->server; servlet->servlet_index=i;
+  servlet->spawning=0; servlet->spawned=0;
+  /* Initialize type and address/endpoint fields */
+  servlet->socktype=filesock;
+  servlet->endpoint.path.sun_family=AF_LOCAL;
+  strcpy(servlet->endpoint.path.sun_path,sockname);
+  apr_thread_mutex_create(&(servlet->lock),
+			  APR_THREAD_MUTEX_DEFAULT,kno_pool);
+  servlet->max_socks=max_socks;
+  if (keep_socks>=0) {
+    servlet_set_keep_socks(servlet,keep_socks);}
+  else {servlet->sockets=NULL; servlet->keep_socks=-1;}
+  servlet->n_socks=0;
+  servlet->n_busy=0;
+  servlet->n_ephemeral=0;
+  n_servlets++;
+  apr_thread_mutex_unlock(servlets_lock);
+  return servlet;
 }
 
 /* Getting (and opening) sockets */
@@ -1807,13 +1768,9 @@ static char *ksocketinfo(knosocket s,char *buf)
     sprintf(sockid,"%s(#%d/%d)",
 	    s->sockname,s->socket_index,s->servlet->n_socks);
   else sprintf(sockid,"%s(@%lx)",s->sockname,((unsigned long)(s)));
-  if (s->socktype==filesock)
-    sprintf(buf,"%s file socket %s (fd=%d)",
-	    ((s->socket_index>=0)?("cached"):("ephemeral")),
-	    sockid,s->conn.fd);
-  else sprintf(buf,"%s APR socket %s",
-	       ((s->socket_index>=0)?("cached"):("ephemeral")),
-	       sockid);
+  sprintf(buf,"%s socket %s (fd=%ld)",
+	  ((s->socket_index>=0)?("cached"):("ephemeral")),
+	  sockid,s->conn.fd);
   return buf;
 }
 
@@ -1821,7 +1778,8 @@ static int get_servlet_wait(request_rec *r);
 
 /* Opens a servlet socket, either a cached one (if given != NULL) or a
    new one (malloc) */
-static knosocket servlet_open(kno_servlet s,struct KNO_SOCKET *given,request_rec *r)
+static knosocket servlet_open(kno_servlet s,struct KNO_SOCKET *given,
+			      request_rec *r)
 {
   struct KNO_SOCKET *result; apr_pool_t *pool; int one=1, dospawn=-1, wait=-1;
   if (given) pool=kno_pool; else pool=r->pool;
@@ -1832,114 +1790,65 @@ static knosocket servlet_open(kno_servlet s,struct KNO_SOCKET *given,request_rec
 
 #if DEBUG_CONNECT
   ap_log_rerror
-    (APLOG_MARK,LOGDEBUG,OK,r,"Opening new %s socket to %s",
+    (APLOG_MARK,LOGDBUG,OK,r,"Opening new %s socket to %s",
      ((given==NULL)?("ephemeral"):("cached")),
      s->sockname);
 #endif
-  if (s->socktype==filesock) {
-    const char *sockname=s->sockname;
-    int unix_sock=socket(PF_LOCAL,SOCK_STREAM,0), connval=-1, rv=-1, intval=1;
-    if (unix_sock<0) {
-      ap_log_rerror(APLOG_MARK,APLOG_CRIT,apr_get_os_error(),r,
-		    "Couldn't open socket for %s (errno=%d:%s)",
-		    sockname,errno,strerror(errno));
-      return NULL;}
-    else ap_log_rerror
-	   (APLOG_MARK,LOGDEBUG,OK,r,
-	    "Opened socket %d to connect to %s",unix_sock,sockname);
-    connval=connect(unix_sock,(struct sockaddr *)&(s->endpoint.path),
-		    SUN_LEN(&(s->endpoint.path)));
-    if ((connval<0)&&(file_socket_existsp(pool,r->server,sockname))) {
-      int wait=get_servlet_wait(r), count=0;
-      while ((count<wait)&&(connval<0)) {
-	sleep(1); count++;
-	connval=connect(unix_sock,(struct sockaddr *)&(s->endpoint.path),
-			SUN_LEN(&(s->endpoint.path)));}}
-    if (connval<0) {
-      ap_log_rerror
-	(APLOG_MARK,APLOG_CRIT,apr_get_os_error(),r,
-	 "Couldn't connect socket @ %s, spawning kno servlet",sockname);
-      errno=0;
+  const char *sockname=s->sockname;
+  int conn=u8_connect(sockname), connval=-1, rv=-1, intval=1;
+  if (conn<0) {
+    if (file_socketp(sockname)) {
+      if (file_socket_existsp(pool,r->server,sockname)) {
+	int wait=get_servlet_wait(r), count=0;
+	while ((count<wait)&&(connval<0)) {
+	  sleep(1); count++;
+	  conn=u8_connect(sockname);}}
+      if (conn<0) {
+	ap_log_rerror
+	  (APLOG_MARK,APLOG_CRIT,apr_get_os_error(),r,
+	   "Couldn't connect socket @ %s, spawning kno servlet",sockname);
+	errno=0;}
       rv=spawn_servlet(s,r,kno_pool);
       if (rv<0) {
 	ap_log_rerror
 	  (APLOG_MARK,APLOG_EMERG,apr_get_os_error(),r,
 	   "Couldn't spawn kno servlet @ %s",sockname);
-	close(unix_sock);
+	close(conn);
 	return NULL;}
       else if (rv)
 	ap_log_rerror(APLOG_MARK,APLOG_INFO,OK,r,
 		      "Spawn succeeded, waiting to connect to %s",sockname);
       else ap_log_rerror(APLOG_MARK,APLOG_INFO,OK,r,
-			 "Waiting to connect to %s",sockname);}
-    if ((connval<0)&&(file_socket_existsp(pool,r->server,sockname))) {
+			 "Waiting to connect to %s",sockname);}}
+    if ((conn<0) &&
+	(file_socketp(sockname)) &&
+	(file_socket_existsp(pool,r->server,sockname))) {
       int wait=get_servlet_wait(r), count=0;
-      while ((count<wait)&&(connval<0)) {
+      while ((count<wait)&&(conn<0)) {
 	sleep(1); count++;
-	connval=connect(unix_sock,(struct sockaddr *)&(s->endpoint.path),
-			SUN_LEN(&(s->endpoint.path)));}}
-    if (connval<0) {
+	conn=u8_connect(sockname);}}
+    if (conn<0) {
       ap_log_rerror
 	(APLOG_MARK,APLOG_CRIT,apr_get_os_error(),r,
 	 "Couldn't connect to %s (errno=%d:%s)",
 	 sockname,errno,strerror(errno));
-      errno=0;
-      close(unix_sock);
-      return NULL;}
+    errno=0;
+    close(conn);
+    return NULL;}
 #if DEBUG_CONNECT
-    ap_log_rerror
-      (APLOG_MARK,LOGDEBUG,OK,r,
-       "Opened new %s file socket (fd=%d) to %s",
-       ((given==NULL)?("ephemeral"):("cached")),
-       unix_sock,s->sockname);
+  ap_log_rerror
+    (APLOG_MARK,LOGDBUG,OK,r,
+     "Opened new %s file socket (fd=%d) to %s",
+     ((given==NULL)?("ephemeral"):("cached")),
+     conn,s->sockname);
 #endif
-    setsockopt(unix_sock,IPPROTO_TCP,TCP_NODELAY,&one,sizeof(int));
-    result->servlet=s;
-    result->socktype=filesock;
-    result->sockname=sockname;
-    result->conn.fd=unix_sock;
-    result->busy=1; result->closed=0;
-    if (!(given)) result->socket_index=-1;
-    return result;}
-  else if (s->socktype==aprsock) {
-    apr_status_t retval;
-    apr_socket_t *sock;
-    retval=apr_socket_create
-      (&sock,APR_INET,SOCK_STREAM,APR_PROTO_TCP,pool);
-    if (retval!=APR_SUCCESS) {
-      ap_log_rerror
-	(APLOG_MARK,APLOG_WARNING,OK,r,
-	 "Unable to allocate socket to connect with %s",
-	 s->sockname);
-      return NULL;}
-    retval=apr_socket_connect(sock,s->endpoint.addr);
-    if (retval!=APR_SUCCESS) {
-      int count=0, wait=get_servlet_wait(r);
-      ap_log_rerror(APLOG_MARK,APLOG_WARNING,OK,r,
-		    "Unable to make connection to %s",s->sockname);
-      while ((count<wait)&&(retval!=APR_SUCCESS)) {
-	sleep(1); count++; retval=apr_socket_connect(sock,s->endpoint.addr);}
-      if (retval!=APR_SUCCESS) {
-	ap_log_rerror(APLOG_MARK,APLOG_WARNING,OK,r,
-		      "Timeout making connection to %s",s->sockname);
-	apr_socket_close(sock);
-	return NULL;}}
-    ap_log_rerror
-      (APLOG_MARK,LOGDEBUG,OK,r,"Opening new %s APR socket to %s",
-       ((given==NULL)?("ephemeral"):("cached")),
-       s->sockname);
-    result->servlet=s;
-    result->socktype=aprsock;
-    result->sockname=s->sockname;
-    result->conn.apr=sock;
-    result->busy=1; result->closed=0;
-    /* -1 as a socket index indicates a malloc'd socket */
-    if (!(given)) result->socket_index=-1;
-    /* If it's an ephemeral socket, record the request */
-    return result;}
-  else {
-    ap_log_rerror(APLOG_MARK,APLOG_CRIT,OK,r,"Bad servlet arg");}
-  return NULL;
+  setsockopt(conn,IPPROTO_TCP,TCP_NODELAY,&one,sizeof(int));
+  result->servlet=s;
+  result->sockname=sockname;
+  result->conn.fd=conn;
+  result->busy=1; result->closed=0;
+  if (!(given)) result->socket_index=-1;
+  return result;
 }
 
 static int get_servlet_wait(request_rec *r)
@@ -1962,7 +1871,7 @@ static knosocket servlet_connect(kno_servlet s,request_rec *r)
       /* There should be a free open socket to reuse, so we scan */
       struct KNO_SOCKET *sockets=s->sockets;
       while (i<lim) {
-	ap_log_error(APLOG_MARK,LOGDEBUG,OK,s->server,
+	ap_log_error(APLOG_MARK,LOGDBUG,OK,s->server,
 		     "Checking %s #%d/%d busy=%d closed=%d",
 		     s->sockname,i,lim,sockets[i].busy,sockets[i].closed);
 	if (sockets[i].busy>0) i++;
@@ -2006,7 +1915,7 @@ static knosocket servlet_connect(kno_servlet s,request_rec *r)
 	if (sock) {s->n_ephemeral++; s->n_busy++;}
 #if DEBUG_SOCKETS
 	ap_log_rerror
-	  (APLOG_MARK,LOGNOTICE,OK,r,
+	  (APLOG_MARK,APLOG_NOTICE,OK,r,
 	   "Using ephemeral (#%d) %s because all %d cached sockets are busy",
 	   s->n_ephemeral,
 	   ksocketinfo(sock,infobuf),
@@ -2025,17 +1934,14 @@ static knosocket servlet_connect(kno_servlet s,request_rec *r)
 	ap_log_rerror(APLOG_MARK,APLOG_WARNING,OK,r,
 		      "New %s",ksocketinfo(sock,infobuf));
 #else
-	ap_log_rerror(APLOG_MARK,LOGINFO,OK,r,
+	ap_log_rerror(APLOG_MARK,APLOG_INFO,OK,r,
 		      "New %s",ksocketinfo(sock,infobuf));
 #endif
 	return sock;}
       else {
 	/* Failed for some reason, open an excess socket */
 	ap_log_rerror(APLOG_MARK,APLOG_WARNING,OK,r,
-		      "Error opening %s %s, trying ephemeral",
-		      ((s->socktype==filesock)?("servlet file socket"):
-		       (s->socktype==aprsock)?("servlet APR socket"):
-		       ("servlet bad socket")),
+		      "Error opening %s, trying ephemeral socket",
 		      s->sockname);
 	s->n_ephemeral++; s->n_busy++;
 	sock=servlet_open(s,NULL,r);
@@ -2081,15 +1987,12 @@ static int servlet_recycle_socket(kno_servlet servlet,knosocket sock)
     busy=servlet->n_busy; ephemeral=servlet->n_ephemeral;
     apr_thread_mutex_unlock(servlet->lock);
 #if DEBUG_SOCKETS
-    ap_log_error(APLOG_MARK,LOGDEBUG,OK,servlet->server,
+    ap_log_error(APLOG_MARK,LOGDBUG,OK,servlet->server,
 		 "Closing %s, %d ephemeral, %d busy",
 		 ksocketinfo(sock,infobuf),
 		 ephemeral,busy);
 #endif
-    if (sock->socktype==aprsock) apr_socket_close(sock->conn.apr);
-    else if (sock->socktype==filesock) {
-      if (sock->conn.fd>0) close(sock->conn.fd);}
-    else {}
+    if (sock->conn.fd>0) close(sock->conn.fd);
     memset(sock,0,sizeof(struct KNO_SOCKET));
     return 0;}
   else {
@@ -2103,13 +2006,9 @@ static int servlet_recycle_socket(kno_servlet servlet,knosocket sock)
       sock->busy=0; servlet->n_busy--;}
     apr_thread_mutex_unlock(servlet->lock);
 #if DEBUG_SOCKETS
-    if (sock->socktype==filesock)
-      ap_log_error(APLOG_MARK,LOGDEBUG,OK,servlet->server,
-		   "Recycling cached file socket #%d (fd=%d) for use with %s",
-		   sock->socket_index,sock->conn.fd,servlet->sockname);
-    else ap_log_error(APLOG_MARK,LOGDEBUG,OK,servlet->server,
-		      "Recycling cached socket #%d for use with %s",
-		      sock->socket_index,servlet->sockname);
+    ap_log_error(APLOG_MARK,LOGDBUG,OK,servlet->server,
+		 "Recycling cached file socket #%d (fd=%ld) for use with %s",
+		 sock->socket_index,sock->conn.fd,servlet->sockname);
 #endif
     return 1;}
 }
@@ -2125,7 +2024,7 @@ static int servlet_close_socket(kno_servlet servlet,knosocket sock)
     return -1;}
   apr_thread_mutex_lock(servlet->lock);
 #if DEBUG_SOCKETS
-  ap_log_error(APLOG_MARK,LOGDEBUG,OK,servlet->server,
+  ap_log_error(APLOG_MARK,LOGDBUG,OK,servlet->server,
 	       "Closing %s",ksocketinfo(sock,infobuf));
 #endif
   if ((sock->socket_index>=0)&&
@@ -2136,27 +2035,17 @@ static int servlet_close_socket(kno_servlet servlet,knosocket sock)
   if (sock->busy) {
     servlet->n_busy--;
     sock->busy=0;}
-  if ((sock->socktype==filesock)&&(sock->conn.fd>0)) {
+  if (sock->conn.fd>0) {
     int rv= close(sock->conn.fd);
     if (rv<0)
-      ap_log_error(APLOG_MARK,LOGDEBUG,rv,servlet->server,
+      ap_log_error(APLOG_MARK,LOGDBUG,rv,servlet->server,
 		   "Error (%s) closing %s",strerror(errno),
 		   ksocketinfo(sock,infobuf));
-    sock->conn.fd=-1; errno=0;}
-  else if (sock->socktype==filesock) {
+    sock->conn.fd=-1; errno=0;} 
+  else {
     ap_log_error(APLOG_MARK,APLOG_WARNING,OK,servlet->server,
 		 "Weird filesocket for %s: %s",
 		 servlet->sockname,ksocketinfo(sock,infobuf));}
-  else if (sock->socktype==aprsock) {
-    apr_status_t rv=apr_socket_close(sock->conn.apr);
-    if (rv!=OK) 
-      ap_log_error(APLOG_MARK,LOGDEBUG,rv,servlet->server,
-		   "Error (%s) closing %s",strerror(errno),
-		   ksocketinfo(sock,infobuf));
-    sock->conn.apr=NULL;}
-  else ap_log_error(APLOG_MARK,APLOG_WARNING,OK,servlet->server,
-		    "Weird socket for %s: %s",
-		    servlet->sockname,ksocketinfo(sock,infobuf));
   sock->closed=1;
   if (sock->socket_index<0) servlet->n_ephemeral--;
   apr_thread_mutex_unlock(servlet->lock);
@@ -2175,7 +2064,7 @@ static kno_servlet request_servlet(request_rec *r)
   int keep_socks=sconfig->keep_socks, max_socks=sconfig->max_socks;
   kno_servlet servlet;
   if (sockname)
-    ap_log_rerror(APLOG_MARK,LOGDEBUG,OK,r,
+    ap_log_rerror(APLOG_MARK,LOGDBUG,OK,r,
 		  "Resolving %s using servlet %s",r->unparsed_uri,sockname);
   else {
     ap_log_rerror(APLOG_MARK,APLOG_CRIT,500,r,
@@ -2192,7 +2081,7 @@ static kno_servlet request_servlet(request_rec *r)
   servlet=get_servlet(sockname);
   if (servlet) {
 #if DEBUG_KNO
-    ap_log_rerror(APLOG_MARK,LOGDEBUG,OK,r,
+    ap_log_rerror(APLOG_MARK,LOGDBUG,OK,r,
 		  "Found existing servlet @#%d for use with %s",
 		  servlet->servlet_index,servlet->sockname);
 #endif
@@ -2227,11 +2116,7 @@ static apr_status_t close_servlets(void *data)
       knosocket sock=&(sockets[j++]);
       if (sock->closed) continue;
       sock_count++;
-      if (sock->socktype==filesock) {
-	if (sock->conn.fd>0) close(sock->conn.fd);}
-      else if (sock->socktype==aprsock)
-	apr_socket_close(sock->conn.apr);
-      else {}
+      if (sock->conn.fd>0) close(sock->conn.fd);
       sock->closed=1; sock->busy=1;}
     apr_thread_mutex_unlock(s->lock);}
   ap_log_perror(APLOG_MARK,APLOG_INFO,OK,p,
@@ -2258,15 +2143,8 @@ static int reset_servlet(kno_servlet s,apr_pool_t *p,int locked)
 		  "mod_knocgi Resetting socket#%d for %s",
 		  j-1,s->sockname);
     if (sock->closed) continue;
-    if (sock->socktype==filesock) {
-      if (sock->conn.fd>0) close(sock->conn.fd);
-      n_closed++;}
-    else if (sock->socktype==aprsock) {
-      apr_socket_close(sock->conn.apr);
-      n_closed++;}
-    else ap_log_perror(APLOG_MARK,APLOG_WARNING,OK,p,
-		       "mod_knocgi Weird socket entry (#%d) for %s",
-		       j-1,s->sockname);
+    if (sock->conn.fd>0) close(sock->conn.fd);
+    n_closed++;
     sock->closed=1; sock->busy=0;}
   s->n_busy=0;
   if (locked==0) apr_thread_mutex_unlock(s->lock);
@@ -2386,7 +2264,7 @@ static int write_table(BUFF *b,apr_table_t *tbl,request_rec *r)
   while (scan < limit) {
 #if DEBUG_CGIDATA
     ap_log_error
-      (APLOG_MARK,LOGDEBUG,OK,r->server,"CGIDATA %s=%s",scan->key,scan->val);
+      (APLOG_MARK,LOGDBUG,OK,r->server,"CGIDATA %s=%s",scan->key,scan->val);
 #endif
     if ((delta=buf_write_symbol(scan->key,b))<0) return -1;
     n_bytes=n_bytes+delta;
@@ -2394,7 +2272,7 @@ static int write_table(BUFF *b,apr_table_t *tbl,request_rec *r)
     n_bytes=n_bytes+delta;
 #if DEBUG_KNO
     ap_log_error
-      (APLOG_MARK,LOGDEBUG,OK,
+      (APLOG_MARK,LOGDBUG,OK,
        r->server,"Buffered HTTP request data %s=%s",
        scan->key,scan->val);
 #endif
@@ -2423,11 +2301,11 @@ static int write_cgidata
 #if DEBUG_CGIDATA
   if (post_size)
     ap_log_error
-      (APLOG_MARK,LOGDEBUG,OK,
+      (APLOG_MARK,LOGDBUG,OK,
        r->server,"CGIDATA: %d slots=%d Apache+%d HTTP+%d config; %d post bytes",
        n_params+n_env+n_hdrs+1,n_env,n_hdrs,n_params,post_size);
   else ap_log_error
-	 (APLOG_MARK,LOGDEBUG,OK,
+	 (APLOG_MARK,LOGDBUG,OK,
 	  r->server,"CGIDATA: - %d slots=%d Apache+%d HTTP+%d config",
 	  n_params+n_env+n_hdrs+1,n_env,n_hdrs,n_params);
 #endif
@@ -2445,7 +2323,7 @@ static int write_cgidata
       if ((delta=buf_write_string((char *)(pscan[1]),b))<0) return -1;
       n_bytes=n_bytes+delta;
 #if DEBUG_KNO
-      ap_log_error(APLOG_MARK,LOGDEBUG,OK,r->server,
+      ap_log_error(APLOG_MARK,LOGDBUG,OK,r->server,
 		   "Buffered servlet parameter %s=%s",
 		   pscan[0],pscan[1]);
 #endif
@@ -2459,7 +2337,7 @@ static int write_cgidata
       n_bytes=n_bytes+delta;
 #if DEBUG_KNO
       ap_log_error
-	(APLOG_MARK,LOGDEBUG,OK,
+	(APLOG_MARK,LOGDBUG,OK,
 	 r->server,"Buffered servlet parameter %s=%s",
 	 pscan[0],pscan[1]);
 #endif
@@ -2474,12 +2352,12 @@ static int write_cgidata
 #if DEBUG_CGIDATA
   if (post_size)
     ap_log_error
-      (APLOG_MARK,LOGDEBUG,OK,
+      (APLOG_MARK,LOGDBUG,OK,
        r->server,"CGIDATA: %lu bytes/%lu posted/%d slots=%d Apache+%d HTTP/%d config",
        (long)n_bytes,(long)post_size,
        n_params+n_env+n_hdrs+1,n_env,n_hdrs,n_params);
   else ap_log_error
-      (APLOG_MARK,LOGDEBUG,OK,
+      (APLOG_MARK,LOGDBUG,OK,
        r->server,"CGIDATA: %lu bytes/%d slots=%d Apache+%d HTTP+%d config",
        (long)n_bytes,n_params+n_env+n_hdrs+1,n_env,n_hdrs,n_params);
 #endif
@@ -2495,44 +2373,21 @@ struct HEAD_SCANNER {
 static int scan_fgets(char *buf,int n_bytes,void *stream)
 {
   struct HEAD_SCANNER *scan=(struct HEAD_SCANNER *)stream;
-  if (scan->sock->socktype==aprsock) {
-    apr_socket_t *sock=scan->sock->conn.apr;
-    request_rec *r=scan->req;
-    /* This should use bigger chunks */
-    char bytes[1], *write=buf, *limit=buf+n_bytes; 
-    size_t bytes_read=1;
-    apr_status_t rv=apr_socket_recv(sock,bytes,&bytes_read);
-    while ((bytes_read>0)&&(rv==OK)) {
-      if (write>=limit) {}
-      else *write++=bytes[0];
-      if (bytes[0] == '\n') break;
-      rv=apr_socket_recv(sock,bytes,&bytes_read);}
-    *write='\0';
+  int sock=scan->sock->conn.fd, bytes_read=0;
+  request_rec *r=scan->req;
+  char bytes[1], *write=buf, *limit=buf+n_bytes;
+  while ((write<limit)&&((read(sock,bytes,1))>0)) {
+    if (write>=limit) {}
+    else *write++=bytes[0];
+    if (bytes[0]=='\n') break;}
+  *write='\0';
 #if DEBUG_KNO
-    ap_log_error
-      (APLOG_MARK,LOGDEBUG,rv,r->server,
-       "mod_knocgi/scan_fgets: Read header string %s from APR socket",buf);
+  ap_log_error
+    (APLOG_MARK,APLOG_WARNING,OK,r->server,
+     "mod_knocgi/scan_fgets: Read header string %s from %d",buf,sock);
 #endif
-    if (write>=limit) return write-buf;
-    else return write-buf;}
-  else if (scan->sock->socktype==filesock) {
-    int sock=scan->sock->conn.fd, bytes_read=0;
-    request_rec *r=scan->req;
-    char bytes[1], *write=buf, *limit=buf+n_bytes;
-    while ((write<limit)&&((read(sock,bytes,1))>0)) { 
-      if (write>=limit) {}
-      else *write++=bytes[0];
-      if (bytes[0]=='\n') break;}
-    *write='\0';
-#if DEBUG_KNO
-    ap_log_error
-      (APLOG_MARK,APLOG_WARNING,OK,r->server,
-       "mod_knocgi/scan_fgets: Read header string %s from %d",buf,sock);
-#endif
-    if (write>=limit) return write-buf;
-    else return write-buf;}
-  else {
-    return -1;}
+  if (write>=limit) return write-buf;
+  else return write-buf;
 }
 
 static int sock_write(request_rec *r,
@@ -2543,146 +2398,97 @@ static int sock_write(request_rec *r,
   char infobuf[256];
 #if DEBUG_TRANSPORT
   ap_log_rerror
-    (APLOG_MARK,LOGDEBUG,OK,r,
+    (APLOG_MARK,LOGDBUG,OK,r,
      "Writing %ld bytes to %s for %s (%s)",
      n_bytes,ksocketinfo(sockval,infobuf),
      r->unparsed_uri,r->filename);
 #endif
 
-  if (sockval->socktype==aprsock) {
-    apr_socket_t *sock=sockval->conn.apr;
-    apr_size_t bytes_to_write=n_bytes, block_size=n_bytes;
-    apr_ssize_t bytes_written=0;
-    while (bytes_written < n_bytes) {
-      /* Since we haven't called apr_socket_timeout_set, this call
-	 will block, which is ok here. */
-      apr_status_t rv=apr_socket_send
-	(sock,(char *)(buf+bytes_written),&block_size);
-      if (rv!=APR_SUCCESS) {
-	char errbuf[256]="unknown", *err;
-	err=apr_strerror(rv,errbuf,256);
-	ap_log_rerror
-	  (APLOG_MARK,LOGDEBUG,OK,r,
-	   "Error (%s) from %s after %ld=%ld-%ld bytes for %s (%s)",
-	   errbuf,ksocketinfo(sockval,infobuf),
-	   (long int)bytes_written,
-	   (long int)n_bytes,
-	   (long int)bytes_to_write,
-	   r->unparsed_uri,r->filename);
-	if (bytes_written<n_bytes) return -1;
-	else break;}
-      else if (block_size == 0) {
-	ap_log_rerror
-	  (APLOG_MARK,LOGDEBUG,OK,r,
-	   "Zero blocks after %ld/%ld on %s for %s (%s)",
-	   ((long int)bytes_written),((long int)n_bytes),
-	   ksocketinfo(sockval,infobuf),
-	   r->unparsed_uri,r->filename);
-	if (bytes_written<n_bytes) return -1;
-	else break;}
-      else {
-	bytes_written=bytes_written+block_size;
-	bytes_to_write=bytes_to_write-bytes_written;
+  int sock=sockval->conn.fd;
+  long int bytes_written=0, bytes_to_write=n_bytes;
 #if DEBUG_TRANSPORT
-	ap_log_error
-	  (APLOG_MARK,LOGDEBUG,OK,
-	   r->server,"Wrote %ld more bytes (%ld/%ld) to %s for %s (%s)",
-	   block_size,bytes_written,n_bytes,
-	   ksocketinfo(sockval,infobuf),
-	   r->unparsed_uri,r->filename);
+  ap_log_error
+    (APLOG_MARK,LOGDBUG,OK,r->server,
+     "Writing %ld bytes to %s for %s (%s)",
+     bytes_to_write,ksocketinfo(sockval,infobuf),
+     r->unparsed_uri,r->filename);
 #endif
-	block_size=bytes_to_write;}}
-    return bytes_written;}
-  else if (sockval->socktype==filesock) {
-    int sock=sockval->conn.fd;
-    long int bytes_written=0, bytes_to_write=n_bytes;
-#if DEBUG_TRANSPORT
-    ap_log_error
-      (APLOG_MARK,LOGDEBUG,OK,r->server,
-       "Writing %ld bytes to %s for %s (%s)",
-       bytes_to_write,ksocketinfo(sockval,infobuf),
-       r->unparsed_uri,r->filename);
-#endif
-    while (bytes_written < n_bytes) {
-      int block_size=write(sock,buf+bytes_written,n_bytes-bytes_written);
-      if (block_size<0) {
-	/* Need to get this to work */
-	if (errno==EPIPE) {
-	  int olderr=errno;
-	  knosocket val;
-	  errno=0; val=servlet_open(sockval->servlet,sockval,r);
-	  if (val) {
-	    if (val->conn.fd==sock) 
-	      ap_log_rerror
-		(APLOG_MARK,APLOG_WARNING,OK,r,
-		 "Reopened %s, continuing output (%ld/%ld so far) for %s (%s)",
-		 ksocketinfo(sockval,infobuf),
-		 bytes_written,n_bytes,
-		 r->unparsed_uri,r->filename);
-	    else {
-	      int new_sock=val->conn.fd;
-	      bytes_written=0; 
-	      ap_log_rerror
-		(APLOG_MARK,APLOG_WARNING,OK,r,
-		 "Reopened %s, resetting output of %ld bytes for %s (%s)",
-		 ksocketinfo(sockval,infobuf),
-		 n_bytes,r->unparsed_uri,r->filename);
-	      sock=new_sock;}
-	    continue;}
-	  else {
+  while (bytes_written < n_bytes) {
+    int block_size=write(sock,buf+bytes_written,n_bytes-bytes_written);
+    if (block_size<0) {
+      /* Need to get this to work */
+      if (errno==EPIPE) {
+	int olderr=errno;
+	knosocket val;
+	errno=0; val=servlet_open(sockval->servlet,sockval,r);
+	if (val) {
+	  if (val->conn.fd==sock)
 	    ap_log_rerror
-	      (APLOG_MARK,APLOG_ERR,OK,r,
-	       "Couldn't reopen %s: (%d:%s) (%d:%s) for %s (%s)",
+	      (APLOG_MARK,APLOG_WARNING,OK,r,
+	       "Reopened %s, continuing output (%ld/%ld so far) for %s (%s)",
 	       ksocketinfo(sockval,infobuf),
-	       olderr,strerror(olderr),errno,strerror(errno),
+	       bytes_written,n_bytes,
 	       r->unparsed_uri,r->filename);
-	    bytes_written=0;}
-	  errno=0;}
+	  else {
+	    int new_sock=val->conn.fd;
+	    bytes_written=0;
+	    ap_log_rerror
+	      (APLOG_MARK,APLOG_WARNING,OK,r,
+	       "Reopened %s, resetting output of %ld bytes for %s (%s)",
+	       ksocketinfo(sockval,infobuf),
+	       n_bytes,r->unparsed_uri,r->filename);
+	    sock=new_sock;}
+	  continue;}
 	else {
 	  ap_log_rerror
 	    (APLOG_MARK,APLOG_ERR,OK,r,
-	     "Error %d (%s) on %s after %ld/%ld bytes for %s (%s)",
-	     errno,strerror(errno),
+	     "Couldn't reopen %s: (%d:%s) (%d:%s) for %s (%s)",
 	     ksocketinfo(sockval,infobuf),
-	     bytes_written,n_bytes,
+	     olderr,strerror(olderr),errno,strerror(errno),
 	     r->unparsed_uri,r->filename);
-	  if (bytes_written<n_bytes) return -1;
-	  else break;}}
-      else if (block_size == 0) {
-	ap_log_rerror
-	  (APLOG_MARK,LOGDEBUG,OK,r,
-	   "Zero blocks written to %s after %ld/%ld for %s (%s)",
-	   ksocketinfo(sockval,infobuf),
-	   (long int)bytes_written,n_bytes,
-	   r->unparsed_uri,r->filename);
-	if (bytes_written<n_bytes) return -(bytes_written+1);
-	else break;}
+	  bytes_written=0;}
+	errno=0;}
       else {
-#if DEBUG_TRANSPORT
 	ap_log_rerror
-	  (APLOG_MARK,LOGDEBUG,OK,r,"Wrote %ld bytes to %s for %s (%s)",
-	   (long int)block_size,ksocketinfo(sockval,infobuf),
+	  (APLOG_MARK,APLOG_ERR,OK,r,
+	   "Error %d (%s) on %s after %ld/%ld bytes for %s (%s)",
+	   errno,strerror(errno),
+	   ksocketinfo(sockval,infobuf),
+	   bytes_written,n_bytes,
 	   r->unparsed_uri,r->filename);
-#endif
-	bytes_written=bytes_written+block_size;}}
-    if (bytes_written!=n_bytes) 
-      ap_log_rerror(APLOG_MARK,(APLOG_CRIT),
-		    OK,r,"Wrote %ld/%ld bytes to %s for %s (%s)",
-		    ((long int)bytes_written),n_bytes,
-		    ksocketinfo(sockval,infobuf),
-		    r->unparsed_uri,r->filename);
+	if (bytes_written<n_bytes) return -1;
+	else break;}}
+    else if (block_size == 0) {
+      ap_log_rerror
+	(APLOG_MARK,LOGDBUG,OK,r,
+	 "Zero blocks written to %s after %ld/%ld for %s (%s)",
+	 ksocketinfo(sockval,infobuf),
+	 (long int)bytes_written,n_bytes,
+	 r->unparsed_uri,r->filename);
+      if (bytes_written<n_bytes) return -(bytes_written+1);
+      else break;}
+    else {
 #if DEBUG_TRANSPORT
-    ap_log_rerror(APLOG_MARK,APLOG_DEBUG,
+      ap_log_rerror
+	(APLOG_MARK,LOGDBUG,OK,r,"Wrote %ld bytes to %s for %s (%s)",
+	 (long int)block_size,ksocketinfo(sockval,infobuf),
+	 r->unparsed_uri,r->filename);
+#endif
+      bytes_written=bytes_written+block_size;}}
+  if (bytes_written!=n_bytes)
+    ap_log_rerror(APLOG_MARK,(APLOG_CRIT),
 		  OK,r,"Wrote %ld/%ld bytes to %s for %s (%s)",
 		  ((long int)bytes_written),n_bytes,
 		  ksocketinfo(sockval,infobuf),
 		  r->unparsed_uri,r->filename);
+#if DEBUG_TRANSPORT
+  ap_log_rerror(APLOG_MARK,APLOG_DEBUG,
+		OK,r,"Wrote %ld/%ld bytes to %s for %s (%s)",
+		((long int)bytes_written),n_bytes,
+		ksocketinfo(sockval,infobuf),
+		r->unparsed_uri,r->filename);
 #endif
-    return bytes_written;}
-  else {
-    ap_log_rerror
-      (APLOG_MARK,APLOG_CRIT,apr_get_os_error(),r,"Bad knosocket passed");
-    return -1;}
+  return bytes_written;
 }
 
 static int copy_servlet_output(knosocket sockval,request_rec *r)
@@ -2695,139 +2501,72 @@ static int copy_servlet_output(knosocket sockval,request_rec *r)
   if (content_length>=0) ap_set_content_length(r,content_length);
   if (content_length<0)
     ap_log_rerror
-      (APLOG_MARK,LOGDEBUG,OK,r,
+      (APLOG_MARK,LOGDBUG,OK,r,
        "Returning some number of content bytes from %s for %s (%s)",
        ksocketinfo(sockval,infobuf),
        r->unparsed_uri,r->filename);
 #if DEBUG_TRANSPORT
   else ap_log_rerror
-	 (APLOG_MARK,LOGDEBUG,OK,r,
+	 (APLOG_MARK,LOGDBUG,OK,r,
 	  "Returning %ld content bytes from %s for %s (%s)",
 	  content_length,ksocketinfo(sockval,infobuf),
 	  r->unparsed_uri,r->filename);
 #endif
-  if (sockval->socktype==aprsock) {
-    apr_socket_t *sock=sockval->conn.apr;
-    while ((content_length<0)||(bytes_read<content_length)) {
-      apr_size_t delta=4096, written=0;
-      apr_status_t rv;
-      if (r->connection->aborted) {
-	ap_log_rerror(APLOG_MARK,APLOG_WARNING,OK,r,
-		      "Connection aborted for %s",r->uri);
-	return -1;}
-      else rv=apr_socket_recv(sock,buf,&delta);
-      if (rv!=OK) {
+  int sock=sockval->conn.fd;
+  while ((content_length<0)||(bytes_read<content_length)) {
+    ssize_t delta=read(sock,buf,4096);
+    if (r->connection->aborted) {
+      ap_log_rerror(APLOG_MARK,APLOG_WARNING,OK,r,
+		    "Connection aborted for %s",r->uri);
+      return -1;}
+    if (delta>0) bytes_read=bytes_read+delta;
+    if (delta>0) {
+      int chunk=ap_rwrite(buf,delta,r); int written=0;
+      while ( (written<delta) && (chunk >= 0) ) {
+	written=written+chunk;
+	if (written<delta)
+	  chunk=ap_rwrite(buf+written,delta-written,r);}
+      if (written>0) bytes_written=bytes_written+written;
+      if ((written<delta) && (chunk<0)) {
 	ap_log_rerror
-	  (APLOG_MARK,LOGDEBUG,rv,r,
-	   "Stopped after reading %ld/%ld bytes from %s for %s (%s)",
-	   (long int)bytes_read,content_length,
+	  (APLOG_MARK,APLOG_ERR,OK,r,
+	   "Request write error (%d:%s) (@%ld/%ld) "
+	   "after reading %ld=>%ld/%ld bytes "
+	   "from %s for %s (%s)",
+	   errno,strerror(errno),(long int)written,(long int)delta,
+	   (long int)bytes_read,(long int)bytes_written,content_length,
 	   ksocketinfo(sockval,infobuf),
 	   r->unparsed_uri,r->filename);
 	error=1;
-	break;}
-      else if (delta>0) {
-	int chunk=ap_rwrite(buf,delta,r); written=0;
-	bytes_read=bytes_read+delta;
-	while (written<delta) {
-	  if (chunk<0) break;
-	  written=written+chunk;
-	  chunk=ap_rwrite(buf+written,delta-written,r);}
-	if (chunk<0) {error=1; break;}}
-      else {error=1; break;}
-      if (written<=0) {
-	ap_log_rerror
-	  (APLOG_MARK,APLOG_ERR,OK,r,
-	   "Write error (%d:%s) (@%ld/%ld) after "
-	   "reading %ld=>%ld/%ld bytes from %s for %s (%s)",
-	   errno,strerror(errno),written,delta,
-	   (long int)bytes_read,(long int)bytes_written,content_length,
-	   ksocketinfo(sockval,infobuf),
-	   r->unparsed_uri,r->filename);
-	errno=0; error=1; break;}}
-    if (error) return -(bytes_read+1);
-    rv=ap_rflush(r);
-    if (r->connection->aborted) {
-      ap_log_rerror(APLOG_MARK,APLOG_WARNING,OK,r,
-		    "Connection aborted for %s",r->uri);
-      return -1;}
-    if (rv!=OK) {
+	break;}}
+    else if (delta==0) {
+      if (bytes_read<content_length)
+	error=1;
+      break;}
+    else if (errno==EAGAIN) {errno=0; continue;}
+    else {
       ap_log_rerror
-	(APLOG_MARK,APLOG_ERR,rv,r,
-	 "Flush error after %ld/%ld/%ld content bytes from %s for %s (%s)",
+	(APLOG_MARK,APLOG_ERR,OK,r,
+	 "Read error (%d:%s) after %ld=>%ld/%ld bytes from %s for %s (%s)",
+	 errno,strerror(errno),
 	 (long int)bytes_read,(long int)bytes_written,content_length,
 	 ksocketinfo(sockval,infobuf),
 	 r->unparsed_uri,r->filename);
-      return -(bytes_read+1);}
-#if DEBUG_TRANSPORT
+      errno=0; error=1; break;}}
+  rv=ap_rflush(r);
+  if (r->connection->aborted) {
+    ap_log_rerror(APLOG_MARK,APLOG_WARNING,OK,r,
+		  "Connection aborted for %s",r->uri);
+    return -1;}
+  if ((error)||(rv!=OK)) {
     ap_log_rerror
-      (APLOG_MARK,APLOG_INFO,OK,r,
-       "Transferred %ld/%ld content bytes from %s for %s (%s)",
+      (APLOG_MARK,APLOG_ERR,rv,r,
+       "Error after transferring %ld/%ld bytes from %s for %s (%s)",
        (long int)bytes_read,content_length,
        ksocketinfo(sockval,infobuf),
        r->unparsed_uri,r->filename);
-#endif
-    return bytes_read;}
-  else if (sockval->socktype==filesock) {
-    int sock=sockval->conn.fd; int error=0, rv=-1;
-    while ((content_length<0)||(bytes_read<content_length)) {
-      ssize_t delta=read(sock,buf,4096);
-      if (r->connection->aborted) {
-	ap_log_rerror(APLOG_MARK,APLOG_WARNING,OK,r,
-		      "Connection aborted for %s",r->uri);
-	return -1;}
-      if (delta>0) bytes_read=bytes_read+delta;
-      if (delta>0) {
-	int chunk=ap_rwrite(buf,delta,r); int written=0;
-	while ( (written<delta) && (chunk >= 0) ) {
-	  written=written+chunk;
-	  if (written<delta)
-	    chunk=ap_rwrite(buf+written,delta-written,r);}
-	if (written>0) bytes_written=bytes_written+written;
-	if ((written<delta) && (chunk<0)) {
-	  ap_log_rerror
-	    (APLOG_MARK,APLOG_ERR,OK,r,
-	     "Request write error (%d:%s) (@%ld/%ld) "
-	     "after reading %ld=>%ld/%ld bytes "
-	     "from %s for %s (%s)",
-	     errno,strerror(errno),(long int)written,(long int)delta,
-	     (long int)bytes_read,(long int)bytes_written,content_length,
-	     ksocketinfo(sockval,infobuf),
-	     r->unparsed_uri,r->filename);
-	  error=1;
-	  break;}}
-      else if (delta==0) {
-	if (bytes_read<content_length)
-	  error=1;
-	break;}
-      else if (errno==EAGAIN) {errno=0; continue;}
-      else {
-	ap_log_rerror
-	  (APLOG_MARK,APLOG_ERR,OK,r,
-	   "Read error (%d:%s) after %ld=>%ld/%ld bytes from %s for %s (%s)",
-	   errno,strerror(errno),
-	   (long int)bytes_read,(long int)bytes_written,content_length,
-	   ksocketinfo(sockval,infobuf),
-	   r->unparsed_uri,r->filename);
-	errno=0; error=1; break;}}
-    rv=ap_rflush(r);
-    if (r->connection->aborted) {
-      ap_log_rerror(APLOG_MARK,APLOG_WARNING,OK,r,
-		    "Connection aborted for %s",r->uri);
-      return -1;}
-    if ((error)||(rv!=OK)) {
-      ap_log_rerror
-	(APLOG_MARK,APLOG_ERR,rv,r,
-	 "Error after transferring %ld/%ld bytes from %s for %s (%s)",
-	 (long int)bytes_read,content_length,
-	 ksocketinfo(sockval,infobuf),
-	 r->unparsed_uri,r->filename);
-      return -(bytes_read+1);}
-    else return bytes_read;}
-  else {
-    ap_log_error
-      (APLOG_MARK,APLOG_CRIT,apr_get_os_error(),r->server,
-       "Bad knosocket passed");
-    return -1;}
+    return -(bytes_read+1);}
+  else return bytes_read;
 }
 
 static int checkabort(request_rec *r,kno_servlet servlet,knosocket sock,
@@ -2887,7 +2626,7 @@ static int kno_handler(request_rec *r)
     status_request=1;
   else return DECLINED;
 #if DEBUG_KNO
-  ap_log_rerror(APLOG_MARK,LOGDEBUG,OK,r,
+  ap_log_rerror(APLOG_MARK,LOGDBUG,OK,r,
 		"Entered kno_handler for %s from %s",
 		r->filename,r->unparsed_uri);
 #endif
@@ -2964,7 +2703,7 @@ static int kno_handler(request_rec *r)
 			"Error reading POST data from client");
 	  if (errno) error=strerror(errno); else error="unknown";
 	  break;}
-	else ap_log_rerror(APLOG_MARK,LOGDEBUG,OK,r,
+	else ap_log_rerror(APLOG_MARK,LOGDBUG,OK,r,
 			   "Read %d bytes of POST data from client",
 			   bytes_read);
 	ap_reset_timeout(r);
@@ -2986,7 +2725,7 @@ static int kno_handler(request_rec *r)
     servlet_recycle_socket(servlet,sock);
     return HTTP_INTERNAL_SERVER_ERROR;}
 #if DEBUG_CGIDATA
-  else ap_log_rerror(APLOG_MARK,LOGDEBUG,OK,r,
+  else ap_log_rerror(APLOG_MARK,LOGDBUG,OK,r,
 		     "Composing request data as a slotmap for %s (%s)",
 		     r->unparsed_uri,r->filename);
 #endif
@@ -2996,13 +2735,13 @@ static int kno_handler(request_rec *r)
 		    r->subprocess_env,r->headers_in,
 		    sreq_params,dreq_params,
 		    post_size,post_data)<0) {
-    ap_log_rerror(APLOG_MARK,LOGDEBUG,OK,r,
+    ap_log_rerror(APLOG_MARK,LOGDBUG,OK,r,
 		  "Error composing request data as a slotmap");
     servlet_recycle_socket(servlet,sock);
     return HTTP_INTERNAL_SERVER_ERROR;}
 
 #if ((DEBUG_CGIDATA)||(DEBUG_TRANSPORT))
-  ap_log_rerror(APLOG_MARK,LOGDEBUG,OK,r,
+  ap_log_rerror(APLOG_MARK,LOGDBUG,OK,r,
 		"Writing %ld bytes of request to %s for %s (%s)",
 		(long int)(reqdata->ptr-reqdata->buf),
 		ksocketinfo(sock,infobuf),
@@ -3041,7 +2780,7 @@ static int kno_handler(request_rec *r)
       if (bytes_written==0)
 	return HTTP_SERVICE_UNAVAILABLE;
       else return HTTP_INTERNAL_SERVER_ERROR;}
-    else ap_log_rerror(APLOG_MARK,LOGDEBUG,OK,r,
+    else ap_log_rerror(APLOG_MARK,LOGDBUG,OK,r,
 		       "Wrote %ld bytes of request data to %s for %s (%s)",
 		       ((long int)(reqdata->ptr-reqdata->buf)),
 		       ksocketinfo(sock,infobuf),
@@ -3053,7 +2792,7 @@ static int kno_handler(request_rec *r)
   
   scanner.sock=sock; scanner.req=r;
   
-  ap_log_rerror(APLOG_MARK,LOGDEBUG,OK,r,
+  ap_log_rerror(APLOG_MARK,LOGDBUG,OK,r,
 		"Waiting for response from %s",
 		ksocketinfo(sock,infobuf));
   
@@ -3079,7 +2818,7 @@ static int kno_handler(request_rec *r)
 		  errbuf,r->status,ksocketinfo(sock,infobuf));
     servlet_close_socket(servlet,sock);
     return HTTP_INTERNAL_SERVER_ERROR;}
-  else ap_log_rerror(APLOG_MARK,LOGDEBUG,OK,r,
+  else ap_log_rerror(APLOG_MARK,LOGDBUG,OK,r,
 		     "Read header from %s, transferring content",
 		     ksocketinfo(sock,infobuf));
   
@@ -3197,7 +2936,7 @@ module AP_MODULE_DECLARE_DATA knocgi_module =
 
 /* Emacs local variables
 ;;;  Local variables: ***
-;;;  compile-command: "cd ../..; make mod_knocgi" ***
+;;;  compile-command: "make mod_knocgi" ***
 ;;;  End: ***
 */
 
