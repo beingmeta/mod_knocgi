@@ -31,6 +31,16 @@ clean:
 	      mod_knocgi.la mod_knocgi.lo mod_knocgi.slo 
 
 debian.built: mod_knocgi.c makefile debian/rules debian/control
-	dpkg-buildpackage -sa -us -uc -b -rfakeroot;
-	debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_1912*.changes
+	dpkg-buildpackage -sa -us -uc -b -rfakeroot && \
+	debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_1912*.changes && \
 	touch $@
+
+debian.pushed: debian.built
+	dupload -c ./debian/dupload.conf --nomail --to bionic ../libapache2-mod-knocgi_*.changes && touch $@
+
+debclean:
+	rm ../libpache2-mod-knocgi*
+
+debfresh:
+	make debclean
+	make debian.built
