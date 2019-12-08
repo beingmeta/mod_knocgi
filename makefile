@@ -5,7 +5,7 @@ SUDO=$(shell which sudo)
 mod_knocgi.so: mod_knocgi.c fileinfo makefile
 	@echo "#define _FILEINFO \""$(shell ./fileinfo mod_knocgi.c)"\"" \
 		> mod_knocgi_fileinfo.h
-	${APXS} -DDEBUG_KNOCGI=$(DEBUG_KNOCGI) -c mod_knocgi.c
+	${APXS} -DDEBUG_KNOCGI=$(DEBUG_KNOCGI) -c mod_knocgi.c -lu8
 
 mod_knocgi: mod_knocgi.so
 
@@ -20,3 +20,5 @@ install: mod_knocgi.so
 update-apache: mod_knocgi
 	make install && sudo apachectl restart
 
+clean:
+	rm -f mod_knocgi.la mod_knocgi.lo mod_knocgi.slo mod_knocgi.so mod_knocgi.o
