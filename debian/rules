@@ -4,8 +4,11 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-%:
-	dh $@
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
 
-override_dh_auto_configure:
-	dh_auto_configure -- --without-sudo --libdir=$(DESTDIR)/usr/lib
+%:
+	dh $@ --build-directory=/tmp/
+
+override_dh_install:
+	make DESTDIR=$$(pwd)/debian/libapache2-mod-knocgi install

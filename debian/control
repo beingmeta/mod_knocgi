@@ -11,5 +11,5 @@ Homepage: http://www.beingmeta.com/
 Package: libapache2-mod-knocgi
 Section: libdevel
 Architecture: any
-Depends: apache2, libu8
+Depends: apache2 | apache2-mpm, libu8
 Description: Apache module for kno servlets
