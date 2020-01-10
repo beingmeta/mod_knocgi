@@ -3,7 +3,7 @@ APXSCMD=$(shell which apxs)
 APXS=${APXSCMD} -S LIBEXECDIR=$(DESTDIR)/usr/lib/apache2/modules -S SYSCONFDIR=${DESTDIR}/etc/apache2
 SYSINSTALL=/usr/bin/install -c
 GPGID=FE1BC737F9F323D732AA26330620266BE5AFF294
-SUDO=
+SUDO=$(shell which sudo)
 
 mod_knocgi.so: mod_knocgi.c fileinfo makefile
 	@echo "#define _FILEINFO \""$(shell ./fileinfo mod_knocgi.c)"\"" \
@@ -19,9 +19,8 @@ fileinfo: etc/fileinfo.c
 # apxs -Wc,'-arch x86_64' -Wl,'-arch x86_64'  -a -i -c src/apache2/mod_knocgi.c
 install: mod_knocgi.so
 	${SUDO} ${APXS} -i -a mod_knocgi.la
-	${SYSINSTALL} knocgi.load ${DESTDIR}/etc/apache2/mods-available
-	${SYSINSTALL} knocgi.conf ${DESTDIR}/etc/apache2/mods-available
-
+	${SUDO} ${SYSINSTALL} knocgi.load ${DESTDIR}/etc/apache2/mods-available
+	${SUDO} ${SYSINSTALL} knocgi.conf ${DESTDIR}/etc/apache2/mods-available
 
 update-apache: mod_knocgi
 	make install && sudo apachectl restart
