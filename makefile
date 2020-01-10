@@ -38,7 +38,7 @@ debian.pushed: debian.built
 	dupload -c ./debian/dupload.conf --nomail --to bionic ../libapache2-mod-knocgi_*.changes && touch $@
 
 debclean:
-	rm ../libpache2-mod-knocgi*
+	rm -f ../libpache2-mod-knocgi*
 
 debfresh:
 	make debclean
