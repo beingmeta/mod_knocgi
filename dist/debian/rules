@@ -12,3 +12,6 @@ export DH_OPTIONS
 
 override_dh_install:
 	make SUDO= DESTDIR=$$(pwd)/debian/libapache2-mod-knocgi install
+
+override_dh_auto_install:
+	make SUDO= DESTDIR=$$(pwd)/debian/libapache2-mod-knocgi install

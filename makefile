@@ -2,6 +2,7 @@ DEBUG_KNOCGI=
 APXSCMD=$(shell which apxs)
 APXS=${APXSCMD} -S LIBEXECDIR=$(DESTDIR)/usr/lib/apache2/modules -S SYSCONFDIR=${DESTDIR}/etc/apache2
 SYSINSTALL=/usr/bin/install -c
+MOD_VERSION = 1912
 GPGID=FE1BC737F9F323D732AA26330620266BE5AFF294
 SUDO=$(shell which sudo)
 
@@ -29,17 +30,43 @@ clean:
 	rm -f mod_knocgi.so mod_knocgi.o \
 	      mod_knocgi.la mod_knocgi.lo mod_knocgi.slo 
 
-debian.built: mod_knocgi.c makefile debian/rules debian/control
+debian: mod_knocgi.c makefile \
+	dist/debian/rules dist/debian/control \
+	dist/debian/changelog.base
+	rm -rf debian
+	cp -r dist/debian debian
+
+debian/changelog: debian mod_knocgi.c makefile
+	cat debian/changelog.base | etc/gitchangelog libapache2-mod-knocgi > $@.tmp
+	@if test ! -f debian/changelog; then \
+	  mv debian/changelog.tmp debian/changelog; \
+	 elif diff debian/changelog debian/changelog.tmp 2>&1 > /dev/null; then \
+	  mv debian/changelog.tmp debian/changelog; \
+	 else rm debian/changelog.tmp; fi
+
+dist/debian.built: mod_knocgi.c makefile debian debian/changelog
 	dpkg-buildpackage -sa -us -uc -b -rfakeroot && \
-	debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_1912*.changes && \
 	touch $@
 
-debian.pushed: debian.built
-	dupload -c ./debian/dupload.conf --nomail --to bionic ../libapache2-mod-knocgi_*.changes && touch $@
+dist/debian.signed: dist/debian.built
+	debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_*.changes && \
+	touch $@
 
-debclean:
-	rm -f ../libpache2-mod-knocgi*
+deb debs dpkg dpkgs: dist/debian.signed
+
+debinstall: dist/debian.signed
+	sudo dpkg -i ../libapache2-mod-knocgi_${MOD_VERSION}*.deb
+
+dist/debian.updated: dist/debian.signed
+	dupload -c ./debian/dupload.conf --nomail --to bionic ../libapache2-mod-knocgi_*.changes && \
+	touch $@
+
+update-apt: dist/debian.updated
+
+debclean: clean
+	rm -rf ../libapache2-mod_knocgi* debian dist/debian.*
 
 debfresh:
 	make debclean
-	make debian.built
+	make dist/debian.signed
+
