@@ -1,10 +1,14 @@
-DEBUG_KNOCGI=
-APXSCMD=$(shell which apxs)
-APXS=${APXSCMD} -S LIBEXECDIR=$(DESTDIR)/usr/lib/apache2/modules -S SYSCONFDIR=${DESTDIR}/etc/apache2
-SYSINSTALL=/usr/bin/install -c
-MOD_VERSION = 1912
-GPGID=FE1BC737F9F323D732AA26330620266BE5AFF294
-SUDO=$(shell which sudo)
+APXSCMD    ::= $(shell which apxs)
+LIBEXECDIR ::= $(DESTDIR)$(shell ${APXSCMD} -q LIBEXECDIR)
+SYSCONFDIR ::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)
+APXCONF_D  ::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)/conf.d
+APXS         = ${APXSCMD} -S LIBEXECDIR=${LIBEXECDIR} -S SYSCONFDIR=${SYSCONFDIR}
+SYSINSTALL   = /usr/bin/install -c
+MOD_VERSION  = 1912
+GPGID        = FE1BC737F9F323D732AA26330620266BE5AFF294
+SUDO         = $(shell which sudo)
+APKREPO      = /srv/repo/apk
+DEBUG_KNOCGI =
 
 mod_knocgi.so: mod_knocgi.c fileinfo makefile
 	@echo "#define _FILEINFO \""$(shell ./fileinfo mod_knocgi.c)"\"" \
@@ -16,12 +20,18 @@ mod_knocgi: mod_knocgi.so
 fileinfo: etc/fileinfo.c
 	$(CC) -o fileinfo etc/fileinfo.c
 
+${LIBEXECDIR} ${SYSCONFDIR} ${APXCONF_D}:
+	@install -d $@
+
 # For OSX, try this
 # apxs -Wc,'-arch x86_64' -Wl,'-arch x86_64'  -a -i -c src/apache2/mod_knocgi.c
-install: mod_knocgi.so
+install: mod_knocgi.so ${LIBEXECDIR} ${SYSCONFDIR}
 	${SUDO} ${APXS} -i -a mod_knocgi.la
 	${SUDO} ${SYSINSTALL} knocgi.load ${DESTDIR}/etc/apache2/mods-available
 	${SUDO} ${SYSINSTALL} knocgi.conf ${DESTDIR}/etc/apache2/mods-available
+conf.d-install: mod_knocgi.so ${LIBEXECDIR} ${SYSCONFDIR} ${APXCONF_D}
+	${SUDO} ${APXS} -i mod_knocgi.la
+	${SUDO} ${SYSINSTALL} knocgi.conf ${APXCONF_D}
 
 update-apache: mod_knocgi
 	make install && sudo apachectl restart
@@ -69,4 +79,30 @@ debclean: clean
 debfresh:
 	make debclean
 	make dist/debian.signed
+
+# Alpine packaging
+
+${APKREPO}/dist/x86_64:
+	@install -d $@
+
+staging/alpine:
+	@install -d $@
+
+staging/alpine/APKBUILD: dist/alpine/APKBUILD staging/alpine
+	cp dist/alpine/APKBUILD staging/alpine
+
+staging/alpine/mod-knocgi.tar: staging/alpine
+	git archive --prefix=mod-knocgi/ -o staging/alpine/mod-knocgi.tar HEAD
+
+dist/alpine.done: staging/alpine/APKBUILD makefile \
+	staging/alpine/mod-knocgi.tar ${APKREPO}/dist/x86_64
+	cd staging/alpine; \
+		abuild -P ${APKREPO} clean cleancache cleanpkg && \
+		abuild checksum && \
+		abuild -P ${APKREPO} && \
+		touch ../../$@
+
+alpine: dist/alpine.done
+
+.PHONY: alpine
 
