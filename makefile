@@ -2,6 +2,8 @@ APXSCMD    ::= $(shell which apxs)
 LIBEXECDIR ::= $(DESTDIR)$(shell ${APXSCMD} -q LIBEXECDIR)
 SYSCONFDIR ::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)
 APXCONF_D  ::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)/conf.d
+CODENAME   ::= $(shell ${KNOCONFIG} codename)
+RELSTATUS  ::= $(shell ${KNOCONFIG} status)
 APXS         = ${APXSCMD} -S LIBEXECDIR=${LIBEXECDIR} -S SYSCONFDIR=${SYSCONFDIR}
 SYSINSTALL   = /usr/bin/install -c
 MOD_VERSION  = 1912
@@ -47,12 +49,13 @@ debian: mod_knocgi.c makefile \
 	cp -r dist/debian debian
 
 debian/changelog: debian mod_knocgi.c makefile
-	cat debian/changelog.base | etc/gitchangelog libapache2-mod-knocgi > $@.tmp
-	@if test ! -f debian/changelog; then \
+	cat debian/changelog.base | \
+		knomod debchangelog  libapache2-mod-knocgi ${CODENAME} ${RELSTATUS} > $@.tmp
+	if test ! -f debian/changelog; then \
 	  mv debian/changelog.tmp debian/changelog; \
-	 elif diff debian/changelog debian/changelog.tmp 2>&1 > /dev/null; then \
+	elif diff debian/changelog debian/changelog.tmp 2>&1 > /dev/null; then \
 	  mv debian/changelog.tmp debian/changelog; \
-	 else rm debian/changelog.tmp; fi
+	else rm debian/changelog.tmp; fi
 
 dist/debian.built: mod_knocgi.c makefile debian debian/changelog
 	dpkg-buildpackage -sa -us -uc -b -rfakeroot && \
