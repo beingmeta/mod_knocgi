@@ -1,19 +1,19 @@
 KNOCONFIG       ::= knoconfig
+APXSCMD          ::= $(shell which apxs)
 prefix		::= $(shell ${KNOCONFIG} prefix)
 libsuffix	::= $(shell ${KNOCONFIG} libsuffix)
-APXSCMD    ::= $(shell which apxs)
-LIBEXECDIR ::= $(DESTDIR)$(shell ${APXSCMD} -q LIBEXECDIR)
-SYSCONFDIR ::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)
-APXCONF_D  ::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)/conf.d
-CODENAME   ::= $(shell ${KNOCONFIG} codename)
-RELSTATUS  ::= $(shell ${KNOCONFIG} status)
-APXS         = ${APXSCMD} -S LIBEXECDIR=${LIBEXECDIR} -S SYSCONFDIR=${SYSCONFDIR}
-SYSINSTALL   = /usr/bin/install -c
-MOD_VERSION  = 1912
-GPGID        = FE1BC737F9F323D732AA26330620266BE5AFF294
-SUDO         = $(shell which sudo)
-APKREPO      = /srv/repo/apk
-DEBUG_KNOCGI =
+LIBEXECDIR      ::= $(DESTDIR)$(shell ${APXSCMD} -q LIBEXECDIR)
+SYSCONFDIR 	::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)
+APXCONF_D	::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)/conf.d
+CODENAME	::= $(shell ${KNOCONFIG} codename)
+RELSTATUS	::= $(shell ${KNOCONFIG} status)
+APXS		= ${APXSCMD} -S LIBEXECDIR=${LIBEXECDIR} -S SYSCONFDIR=${SYSCONFDIR}
+SYSINSTALL	= /usr/bin/install -c
+MOD_VERSION	= 1912
+GPGID        	= FE1BC737F9F323D732AA26330620266BE5AFF294
+SUDO         	= $(shell which sudo)
+APKREPO      	= /srv/repo/apk
+DEBUG_KNOCGI 	=
 
 mod_knocgi.so: mod_knocgi.c fileinfo makefile
 	@echo "#define _FILEINFO \""$(shell ./fileinfo mod_knocgi.c)"\"" \
