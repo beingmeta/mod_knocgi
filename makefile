@@ -1,3 +1,6 @@
+KNOCONFIG       ::= knoconfig
+prefix		::= $(shell ${KNOCONFIG} prefix)
+libsuffix	::= $(shell ${KNOCONFIG} libsuffix)
 APXSCMD    ::= $(shell which apxs)
 LIBEXECDIR ::= $(DESTDIR)$(shell ${APXSCMD} -q LIBEXECDIR)
 SYSCONFDIR ::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)
@@ -50,7 +53,7 @@ debian: mod_knocgi.c makefile \
 
 debian/changelog: debian mod_knocgi.c makefile
 	cat debian/changelog.base | \
-		knomod debchangelog  libapache2-mod-knocgi ${CODENAME} ${RELSTATUS} > $@.tmp
+		knomod debchangelog libapache2-mod-knocgi ${CODENAME} ${RELSTATUS} > $@.tmp
 	if test ! -f debian/changelog; then \
 	  mv debian/changelog.tmp debian/changelog; \
 	elif diff debian/changelog debian/changelog.tmp 2>&1 > /dev/null; then \
