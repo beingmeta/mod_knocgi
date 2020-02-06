@@ -1,5 +1,5 @@
 KNOCONFIG       ::= knoconfig
-APXSCMD          ::= $(shell which apxs)
+APXSCMD         ::= $(shell which apxs)
 prefix		::= $(shell ${KNOCONFIG} prefix)
 libsuffix	::= $(shell ${KNOCONFIG} libsuffix)
 LIBEXECDIR      ::= $(DESTDIR)$(shell ${APXSCMD} -q LIBEXECDIR)
@@ -31,7 +31,7 @@ ${LIBEXECDIR} ${SYSCONFDIR} ${APXCONF_D}:
 # For OSX, try this
 # apxs -Wc,'-arch x86_64' -Wl,'-arch x86_64'  -a -i -c src/apache2/mod_knocgi.c
 install: mod_knocgi.so ${LIBEXECDIR} ${SYSCONFDIR}
-	${SUDO} ${APXS} -i -a mod_knocgi.la
+	${SUDO} ${APXS} -i -A mod_knocgi.la
 	${SUDO} ${SYSINSTALL} knocgi.load ${DESTDIR}/etc/apache2/mods-available
 	${SUDO} ${SYSINSTALL} knocgi.conf ${DESTDIR}/etc/apache2/mods-available
 conf.d-install: mod_knocgi.so ${LIBEXECDIR} ${SYSCONFDIR} ${APXCONF_D}
