@@ -15,8 +15,8 @@ MOD_VERSION	= 1912
 GPGID        	= FE1BC737F9F323D732AA26330620266BE5AFF294
 SUDO         	= $(shell which sudo)
 
-DEFAULT_ARCH    ::= $(shell /bin/arch)
-ARCH            ::= $(shell ${KNOBUILD} ARCH ${DEFAULT_ARCH})
+DEFAULT_ARCH    ::= $(shell uname -m)
+ARCH            ::= $(shell ${KNOBUILD} getbuildopt BUILD_ARCH || uname -m)
 APKREPO         ::= $(shell ${KNOBUILD} getbuildopt APKREPO /srv/repo/kno/apk)
 APK_ARCH_DIR      = ${APKREPO}/staging/${ARCH}
 
