@@ -1,4 +1,6 @@
 KNOCONFIG       ::= knoconfig
+KNOBUILD          = knobuild
+
 APXSCMD         ::= $(shell which apxs)
 prefix		::= $(shell ${KNOCONFIG} prefix)
 libsuffix	::= $(shell ${KNOCONFIG} libsuffix)
@@ -12,7 +14,12 @@ SYSINSTALL	= /usr/bin/install -c
 MOD_VERSION	= 1912
 GPGID        	= FE1BC737F9F323D732AA26330620266BE5AFF294
 SUDO         	= $(shell which sudo)
-APKREPO      	= /srv/repo/apk
+
+DEFAULT_ARCH    ::= $(shell /bin/arch)
+ARCH            ::= $(shell ${KNOBUILD} ARCH ${DEFAULT_ARCH})
+APKREPO         ::= $(shell ${KNOBUILD} getbuildopt APKREPO /srv/repo/kno/apk)
+APK_ARCH_DIR      = ${APKREPO}/staging/${ARCH}
+
 DEBUG_KNOCGI 	=
 
 mod_knocgi.so: mod_knocgi.c fileinfo makefile
@@ -88,9 +95,6 @@ debfresh:
 
 # Alpine packaging
 
-${APKREPO}/dist/x86_64:
-	@install -d $@
-
 staging/alpine:
 	@install -d $@
 
@@ -100,8 +104,8 @@ staging/alpine/APKBUILD: dist/alpine/APKBUILD staging/alpine
 staging/alpine/mod-knocgi.tar: staging/alpine
 	git archive --prefix=mod-knocgi/ -o staging/alpine/mod-knocgi.tar HEAD
 
-dist/alpine.done: staging/alpine/APKBUILD makefile \
-	staging/alpine/mod-knocgi.tar ${APKREPO}/dist/x86_64
+dist/alpine.done: staging/alpine/APKBUILD makefile staging/alpine/mod-knocgi.tar
+	if [ ! -d ${APK_ARCH_DIR} ]; then mkdir -p ${APK_ARCH_DIR}; fi;
 	cd staging/alpine; \
 		abuild -P ${APKREPO} clean cleancache cleanpkg && \
 		abuild checksum && \
