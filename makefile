@@ -51,6 +51,14 @@ update-apache: mod_knocgi
 clean:
 	rm -f mod_knocgi.so mod_knocgi.o \
 	      mod_knocgi.la mod_knocgi.lo mod_knocgi.slo 
+fresh:
+	make clean
+	make default
+
+gitup gitup-trunk:
+	git checkout trunk && git pull
+
+# Debian packaging
 
 debian: mod_knocgi.c makefile \
 	dist/debian/rules dist/debian/control \
