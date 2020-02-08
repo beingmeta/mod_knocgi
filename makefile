@@ -6,7 +6,9 @@ LIBEXECDIR      ::= $(DESTDIR)$(shell ${APXSCMD} -q LIBEXECDIR)
 SYSCONFDIR 	::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)
 APXCONF_D	::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)/conf.d
 CODENAME	::= $(shell ${KNOCONFIG} codename)
-RELSTATUS	::= $(shell ${KNOCONFIG} status)
+REL_BRANCH	::= $(shell ${KNOBUILD} getbuildopt REL_BRANCH current)
+REL_STATUS	::= $(shell ${KNOBUILD} getbuildopt REL_STATUS stable)
+REL_PRIORITY	::= $(shell ${KNOBUILD} getbuildopt REL_PRIORITY medium)
 APXS		= ${APXSCMD} -S LIBEXECDIR=${LIBEXECDIR} -S SYSCONFDIR=${SYSCONFDIR}
 SYSINSTALL	= /usr/bin/install -c
 MOD_VERSION	= 1912
@@ -53,7 +55,9 @@ debian: mod_knocgi.c makefile \
 
 debian/changelog: debian mod_knocgi.c makefile
 	cat debian/changelog.base | \
-		knobuild debchangelog libapache2-mod-knocgi ${CODENAME} ${RELSTATUS} > $@.tmp
+		knobuild debchangelog libapache2-mod-knocgi ${CODENAME} \
+			${REL_BRANCH} ${REL_STATUS} ${REL_PRIORITY} \
+	    > $@.tmp
 	if test ! -f debian/changelog; then \
 	  mv debian/changelog.tmp debian/changelog; \
 	elif diff debian/changelog debian/changelog.tmp 2>&1 > /dev/null; then \
