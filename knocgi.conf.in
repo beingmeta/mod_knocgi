@@ -1,0 +1,11 @@
+<IfModule !knocgi_module>
+  LoadModule knocgi_module      LIBEXECDIR/mod_knocgi.so
+</IfModule>
+<IfModule mod_knocgi.c>
+        AddHandler knocgi .knocgi .knoxml .knoml .nml .cgi.scm .cgi.scm
+	KnoExecutable BINDIR/knocgi
+	KnoUser WEBUSER
+	KnoGroup ADMINGROUP
+	KnoPrefix RUNDIR/servlets
+	KnoLogPrefix LOGDIR/servlets
+</IfModule>

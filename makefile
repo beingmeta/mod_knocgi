@@ -4,6 +4,7 @@ KNOBUILD          = knobuild
 APXSCMD         ::= $(shell which apxs)
 prefix		::= $(shell ${KNOCONFIG} prefix)
 libsuffix	::= $(shell ${KNOCONFIG} libsuffix)
+WEBUSER 	::= $(shell ${KNOCONFIG} webuser)
 LIBEXECDIR      ::= $(DESTDIR)$(shell ${APXSCMD} -q LIBEXECDIR)
 SYSCONFDIR 	::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)
 APXCONF_D	::= $(DESTDIR)$(shell ${APXSCMD} -q SYSCONFDIR)/conf.d
@@ -16,6 +17,11 @@ SYSINSTALL	= /usr/bin/install -c
 MOD_VERSION	= 1912
 GPGID        	= FE1BC737F9F323D732AA26330620266BE5AFF294
 SUDO         	= $(shell which sudo)
+
+BINDIR		::= $(shell ${KNOCONFIG} bin)
+RUNDIR		::= $(shell ${KNOCONFIG} rundir)
+LOGDIR		::= $(shell ${KNOCONFIG} logdir)
+ADMINGROUP	::= $(shell ${KNOCONFIG} admin_group)
 
 DEFAULT_ARCH    ::= $(shell uname -m)
 ARCH            ::= $(shell ${KNOBUILD} getbuildopt BUILD_ARCH || uname -m)
@@ -37,13 +43,24 @@ fileinfo: etc/fileinfo.c
 ${LIBEXECDIR} ${SYSCONFDIR} ${APXCONF_D}:
 	@install -d $@
 
+knocgi.conf: knocgi.conf.in
+	cp knocgi.conf.in knocgi.conf
+	${KNOBUILD} dosubst knocgi.conf \
+		WEBUSER ${WEBUSER} ADMINGROUP ${ADMINGROUP} \
+		LIBEXECDIR ${LIBEXECDIR} \
+		BINDIR ${BINDIR} RUNDIR ${RUNDIR} LOGDIR ${LOGDIR}
+
+knocgi.load: knocgi.load.in
+	cp knocgi.load.in knocgi.load
+	${KNOBUILD} dosubst knocgi.load LIBEXECDIR ${LIBEXECDIR}
+
 # For OSX, try this
 # apxs -Wc,'-arch x86_64' -Wl,'-arch x86_64'  -a -i -c src/apache2/mod_knocgi.c
-install: mod_knocgi.so ${LIBEXECDIR} ${SYSCONFDIR}
+install: mod_knocgi.so knocgi.conf knocgi.load ${LIBEXECDIR} ${SYSCONFDIR}
 	${SUDO} ${APXS} -i -A mod_knocgi.la
 	${SUDO} ${SYSINSTALL} knocgi.load ${DESTDIR}/etc/apache2/mods-available
 	${SUDO} ${SYSINSTALL} knocgi.conf ${DESTDIR}/etc/apache2/mods-available
-conf.d-install: mod_knocgi.so ${LIBEXECDIR} ${SYSCONFDIR} ${APXCONF_D}
+conf.d-install: mod_knocgi.so knocgi.conf ${LIBEXECDIR} ${SYSCONFDIR} ${APXCONF_D}
 	${SUDO} ${APXS} -i mod_knocgi.la
 	${SUDO} ${SYSINSTALL} knocgi.conf ${APXCONF_D}
 
