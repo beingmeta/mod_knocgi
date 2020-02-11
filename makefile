@@ -83,6 +83,8 @@ debian: mod_knocgi.c makefile \
 	dist/debian/rules dist/debian/control \
 	dist/debian/changelog.base
 	rm -rf debian
+	chmod a-x dist/debian/* || chmod a+x dist/debian/rules dist/debian/source
+	chmod a+x dist/debian/rules dist/debian/source
 	cp -r dist/debian debian
 
 debian/changelog: debian mod_knocgi.c makefile
