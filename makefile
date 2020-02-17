@@ -30,6 +30,8 @@ APK_ARCH_DIR      = ${APKREPO}/staging/${ARCH}
 
 DEBUG_KNOCGI 	=
 
+default: mod_knocgi.so knocgi.conf knocgi.load
+
 mod_knocgi.so: mod_knocgi.c fileinfo makefile
 	@echo "#define _FILEINFO \""$(shell ./fileinfo mod_knocgi.c)"\"" \
 		> mod_knocgi_fileinfo.h
