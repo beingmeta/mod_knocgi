@@ -120,6 +120,9 @@ dist/debian.updated: dist/debian.signed
 
 update-apt: dist/debian.updated
 
+debinstall: dist/debian.signed
+	${SUDO} dpkg -i ../libapache2-mod_knocgi*.deb
+
 debclean: clean
 	rm -rf ../libapache2-mod_knocgi* debian dist/debian.*
 
