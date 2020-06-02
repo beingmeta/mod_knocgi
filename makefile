@@ -112,7 +112,7 @@ dist/debian.signed: dist/debian.built
 deb debs dpkg dpkgs: dist/debian.signed
 
 debinstall: dist/debian.signed
-	sudo dpkg -i ../libapache2-mod-knocgi_${MOD_VERSION}*.deb
+	sudo dpkg -i ../libapache2-mod-knocgi_*.deb
 
 dist/debian.updated: dist/debian.signed
 	dupload -c ./debian/dupload.conf --nomail --to bionic ../libapache2-mod-knocgi_*.changes && \
