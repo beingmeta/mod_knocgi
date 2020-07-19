@@ -27,7 +27,6 @@ DEFAULT_ARCH    ::= $(shell uname -m)
 ARCH            ::= $(shell ${KNOBUILD} getbuildopt BUILD_ARCH || uname -m)
 APKREPO         ::= $(shell ${KNOBUILD} getbuildopt APKREPO /srv/repo/kno/apk)
 APK_ARCH_DIR      = ${APKREPO}/staging/${ARCH}
-ABUILD_FLAGS      =
 
 DEBUG_KNOCGI 	=
 
@@ -142,15 +141,22 @@ staging/alpine/APKBUILD: dist/alpine/APKBUILD staging/alpine
 staging/alpine/mod-knocgi.tar: staging/alpine
 	git archive --prefix=mod-knocgi/ -o staging/alpine/mod-knocgi.tar HEAD
 
-dist/alpine.done: staging/alpine/APKBUILD makefile staging/alpine/mod-knocgi.tar
-	if [ ! -d ${APK_ARCH_DIR} ]; then mkdir -p ${APK_ARCH_DIR}; fi;
-	cd staging/alpine; \
+dist/alpine.setup: staging/alpine/APKBUILD makefile ${STATICLIBS} \
+	staging/alpine/kno-${PKG_NAME}.tar
+	if [ ! -d ${APK_ARCH_DIR} ]; then mkdir -p ${APK_ARCH_DIR}; fi && \
+	( cd staging/alpine; \
 		abuild -P ${APKREPO} clean cleancache cleanpkg && \
-		abuild checksum && \
-		abuild -P ${APKREPO} ${ABUILD_FLAGS} && \
-		touch ../../$@
+		abuild checksum ) && \
+	touch $@
+
+dist/alpine.done: dist/alpine.setup
+	( cd staging/alpine; abuild -P ${APKREPO} ) && touch $@
+dist/alpine.installed: dist/alpine.setup
+	( cd staging/alpine; abuild -i -P ${APKREPO} ) && touch dist/alpine.done && touch $@
+
 
 alpine: dist/alpine.done
+install-alpine: dist/alpine.done
 
 .PHONY: alpine
 
