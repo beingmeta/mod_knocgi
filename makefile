@@ -14,9 +14,13 @@ REL_STATUS	::= $(shell ${KNOBUILD} getbuildopt REL_STATUS stable)
 REL_PRIORITY	::= $(shell ${KNOBUILD} getbuildopt REL_PRIORITY medium)
 APXS		= ${APXSCMD} -S LIBEXECDIR=${LIBEXECDIR} -S SYSCONFDIR=${SYSCONFDIR}
 SYSINSTALL	= /usr/bin/install -c
-MOD_VERSION	= 1912
 GPGID        	= FE1BC737F9F323D732AA26330620266BE5AFF294
 SUDO         	= $(shell which sudo)
+
+KNOCGI_VERSION	::= $(shell cat ./version)
+PATCHLEVEL	::= $(shell u8_gitpatchcount ./version)
+PATCH_VERSION	::= ${KNOCGI_VERSION}-${PATCHLEVEL}
+
 
 BINDIR		::= $(shell ${KNOCONFIG} bin)
 RUNDIR		::= $(shell ${KNOCONFIG} rundir)
@@ -92,8 +96,8 @@ debian: mod_knocgi.c makefile \
 
 debian/changelog: debian mod_knocgi.c makefile
 	cat debian/changelog.base | \
-		knobuild debchangelog libapache2-mod-knocgi ${CODENAME} \
-			${REL_BRANCH} ${REL_STATUS} ${REL_PRIORITY} \
+		u8_debchangelog libapache2-mod-knocgi ${CODENAME} \
+			${REL_BRANCH} ${PATCH_VERSION} ${REL_STATUS} ${REL_PRIORITY} \
 	    > $@.tmp
 	if test ! -f debian/changelog; then \
 	  mv debian/changelog.tmp debian/changelog; \
@@ -142,7 +146,7 @@ staging/alpine/mod-knocgi.tar: staging/alpine
 	git archive --prefix=mod-knocgi/ -o staging/alpine/mod-knocgi.tar HEAD
 
 dist/alpine.setup: staging/alpine/APKBUILD makefile ${STATICLIBS} \
-	staging/alpine/kno-${PKG_NAME}.tar
+	staging/alpine/mod-knocgi.tar
 	if [ ! -d ${APK_ARCH_DIR} ]; then mkdir -p ${APK_ARCH_DIR}; fi && \
 	( cd staging/alpine; \
 		abuild -P ${APKREPO} clean cleancache cleanpkg && \
