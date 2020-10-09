@@ -1,4 +1,3 @@
-
 /* C Mode */
 
 /* mod_knocgi.c
@@ -35,8 +34,8 @@
 #define DEBUG_ALL 1
 #endif
 
-#ifndef DEBUG_KNOWEB
-#define DEBUG_KNOWEB DEBUG_ALL
+#ifndef DEBUG_KNOCGI
+#define DEBUG_KNOCGI DEBUG_ALL
 #endif
 
 #ifndef DEBUG_CGIDATA
@@ -55,7 +54,7 @@
 #define DEBUG_SOCKETS DEBUG_ALL
 #endif
 
-#if DEBUG_KNOWEB
+#if DEBUG_KNOCGI
 #define LOGDBUG APLOG_INFO
 #else
 #define LOGDBUG APLOG_DEBUG
@@ -131,6 +130,7 @@ typedef unsigned int INTPOINTER;
 #include <sys/ioctl.h>
 
 #ifndef TRACK_EXECUTION_TIMES
+/* TODO: Default to using clock_gettime() */
 #if HAVE_FTIME
 #define TRACK_EXECUTION_TIMES 1
 #else
@@ -1218,7 +1218,7 @@ static const char *get_log_file(request_rec *r,const char *sockname) /* 2.0 */
   else return log_file;
 }
 
-static int spawn_wait(kno_servlet s,request_rec *r,apr_proc_t *p);
+static int spawn_wait(kno_servlet s,request_rec *r,apr_proc_t *p,int external);
 static int start_servlet(request_rec *r,kno_servlet s,
 			 struct KNO_DIR_CONFIG *dconfig,
 			 struct KNO_SERVER_CONFIG *sconfig);
@@ -1256,9 +1256,9 @@ static int spawn_servlet(kno_servlet s,request_rec *r,apr_pool_t *p)
 
   if (servlet_spawn<=0) {
     ap_log_error(APLOG_MARK,APLOG_CRIT,OK,server,
-		 "Waiting on external socket %s for %s",
+		 "Waiting on external (unspawned) socket %s for %s",
 		 sockname,r->unparsed_uri);
-    return spawn_wait(s,r,NULL);}
+    return spawn_wait(s,r,NULL,1);}
   else {
     ap_log_rerror
       (APLOG_MARK,APLOG_INFO,OK,r,
@@ -1336,7 +1336,7 @@ static int start_servlet(request_rec *r,kno_servlet s,
     ap_log_error(APLOG_MARK,APLOG_CRIT,OK,server,
 		 "Waiting on spawned socket %s for %s, uid=%d, gid=%d",
 		 sockname,r->unparsed_uri,uid,gid);
-    int rv = spawn_wait(s,r,&(s->proc));
+    int rv = spawn_wait(s,r,&(s->proc),0);
     if (unlock) {
       apr_file_unlock(lockfile);
       apr_file_remove(lockname,p);}
@@ -1599,7 +1599,7 @@ static int start_servlet(request_rec *r,kno_servlet s,
       return -1;}}
 
   /* Now wait for the socket file to exist */
-  int started = spawn_wait(s,r,proc);
+  int started = spawn_wait(s,r,proc,0);
 
   if (unlock) {
     apr_file_unlock(lockfile);
@@ -1611,7 +1611,8 @@ static int start_servlet(request_rec *r,kno_servlet s,
   else return retval;
 }
 
-static int spawn_wait(kno_servlet s,request_rec *r,apr_proc_t *proc)
+static int spawn_wait(kno_servlet s,request_rec *r,apr_proc_t *proc,
+		      int external)
 {
   apr_pool_t *p=((r==NULL)?(kno_pool):(r->pool));
   const char *sockname=s->sockname;
@@ -1627,7 +1628,9 @@ static int spawn_wait(kno_servlet s,request_rec *r,apr_proc_t *proc)
   sleep(1); while ((rv=stat(sockname,&stat_data)) < 0) {
       if (elapsed>servlet_wait) {
 	ap_log_rerror(APLOG_MARK,APLOG_EMERG,apr_get_os_error(),r,
-		      "Failed to spawn socket %s after %d/%d seconds (%d:%s)",
+		      ((external)?
+		       ("Gave up waiting for external socket %s after %d/%d seconds (%d:%s)") :
+		       ("Failed to spawn socket %s after %d/%d seconds (%d:%s)")),
 		      sockname,elapsed,servlet_wait,
 		      errno,strerror(errno));
 	errno=0;
@@ -1635,8 +1638,12 @@ static int spawn_wait(kno_servlet s,request_rec *r,apr_proc_t *proc)
       if (((elapsed)%10)==0) {
 	ap_log_rerror
 	  (APLOG_MARK,APLOG_NOTICE,OK,r,
-	   "(%d/%dsecs) waiting for %s to exist (errno=%d:%s)",
-	   elapsed,servlet_wait,sockname,errno,strerror(errno));
+	   "(%d/%dsecs) waiting for%s %s to %s (errno=%d:%s)",
+	   elapsed,servlet_wait,
+	   ((external)?(" external socket "):("")),
+	   sockname,
+	   ((external)?("respond "):("exist")),
+	   errno,strerror(errno));
 	errno=0; sleep(1);}
       else sleep(1);
       elapsed++;}

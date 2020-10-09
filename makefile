@@ -16,6 +16,7 @@ APXS		= ${APXSCMD} -S LIBEXECDIR=${LIBEXECDIR} -S SYSCONFDIR=${SYSCONFDIR}
 SYSINSTALL	= /usr/bin/install -c
 GPGID        	= FE1BC737F9F323D732AA26330620266BE5AFF294
 SUDO         	= $(shell which sudo)
+DEBUG_KNOCGI 	=
 
 KNOCGI_VERSION	::= $(shell cat ./version)
 PATCHLEVEL	::= $(shell u8_gitpatchcount ./version)
@@ -32,14 +33,16 @@ ARCH            ::= $(shell ${KNOBUILD} getbuildopt BUILD_ARCH || uname -m)
 APKREPO         ::= $(shell ${KNOBUILD} getbuildopt APKREPO /srv/repo/kno/apk)
 APK_ARCH_DIR      = ${APKREPO}/staging/${ARCH}
 
-DEBUG_KNOCGI 	=
-
 default: mod_knocgi.so knocgi.conf knocgi.load
+debug: clean
+	make DEBUG_KNOCGI=1 mod_knocgi.so knocgi.conf knocgi.load
 
 mod_knocgi.so: mod_knocgi.c fileinfo makefile
 	@echo "#define _FILEINFO \""$(shell ./fileinfo mod_knocgi.c)"\"" \
 		> mod_knocgi_fileinfo.h
-	${APXS} -DDEBUG_KNOCGI=$(DEBUG_KNOCGI) -c mod_knocgi.c -lu8
+	if test ! -z "${DEBUG_KNOCGI}"; then 				\
+	   ${APXS} -DDEBUG_KNOCGI=$(DEBUG_KNOCGI) -c mod_knocgi.c -lu8; \
+	else ${APXS} -c mod_knocgi.c -lu8; fi;
 
 mod_knocgi: mod_knocgi.so
 
