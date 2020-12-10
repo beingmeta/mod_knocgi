@@ -38,17 +38,14 @@ default: mod_knocgi.so knocgi.conf knocgi.load
 debug: clean
 	make DEBUG_KNOCGI=1 mod_knocgi.so knocgi.conf knocgi.load
 
-mod_knocgi.so: mod_knocgi.c fileinfo makefile
-	@echo "#define _FILEINFO \""$(shell ./fileinfo mod_knocgi.c)"\"" \
+mod_knocgi.so: mod_knocgi.c makefile
+	@echo "#define _FILEINFO \""$(shell u8_fileinfo mod_knocgi.c)"\"" \
 		> mod_knocgi_fileinfo.h
 	if test ! -z "${DEBUG_KNOCGI}"; then 				\
 	   ${APXS} -DDEBUG_KNOCGI=$(DEBUG_KNOCGI) -c mod_knocgi.c -lu8; \
 	else ${APXS} -c mod_knocgi.c -lu8; fi;
 
 mod_knocgi: mod_knocgi.so
-
-fileinfo: etc/fileinfo.c
-	$(CC) -o fileinfo etc/fileinfo.c
 
 ${LIBEXECDIR} ${SYSCONFDIR} ${APXCONF_D}:
 	@install -d $@
