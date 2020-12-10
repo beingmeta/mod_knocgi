@@ -12,7 +12,8 @@ CODENAME	::= $(shell ${KNOCONFIG} codename)
 REL_BRANCH	::= $(shell ${KNOBUILD} getbuildopt REL_BRANCH current)
 REL_STATUS	::= $(shell ${KNOBUILD} getbuildopt REL_STATUS stable)
 REL_PRIORITY	::= $(shell ${KNOBUILD} getbuildopt REL_PRIORITY medium)
-APXS		= ${APXSCMD} -S LIBEXECDIR=${LIBEXECDIR} -S SYSCONFDIR=${SYSCONFDIR}
+CFLAGS		= -O2 -g -Wno-pointer-sign
+APXS		= ${APXSCMD} -S CFLAGS="${CFLAGS}" -S LIBEXECDIR=${LIBEXECDIR} -S SYSCONFDIR=${SYSCONFDIR}
 SYSINSTALL	= /usr/bin/install -c
 GPGID        	= FE1BC737F9F323D732AA26330620266BE5AFF294
 SUDO         	= $(shell which sudo)
@@ -113,17 +114,15 @@ dist/debian.built: mod_knocgi.c makefile debian debian/changelog
 	touch $@
 
 dist/debian.signed: dist/debian.built
-	debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_*.changes && \
-	touch $@
+	if test "$GPGID" = "none" || test -z "${GPGID}"; then  	\
+	  echo "Skipping debian signing";			\
+	  touch $@;						\
+	else 							\
+	  debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_*.changes && 	\
+	  touch $@;						\
+	fi;
 
 deb debs dpkg dpkgs: dist/debian.signed
-
-debinstall: dist/debian.signed
-	sudo dpkg -i ../libapache2-mod-knocgi_*.deb
-
-dist/debian.updated: dist/debian.signed
-	dupload -c ./debian/dupload.conf --nomail --to bionic ../libapache2-mod-knocgi_*.changes && \
-	touch $@
 
 update-apt: dist/debian.updated
 

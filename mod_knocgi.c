@@ -1288,13 +1288,15 @@ static int start_servlet(request_rec *r,kno_servlet s,
   const char **server_env=(sconfig->servlet_env);
   const char **dir_env=(dconfig->servlet_env);
   const char *log_file=get_log_file(r,NULL);
+  /* ?? Should these be the same file somehow? */
   const char *lockname=apr_pstrcat(p,sockname,".spawn",NULL);
+  const char *launchname=apr_pstrcat(p,sockname,".launcher",NULL);
   apr_procattr_t *attr; apr_proc_t *proc=&(s->proc);
   /* Executable, socket name, NULL, LOG_FILE env, NULL */
   const char *argv[2+MAX_CONFIGS+1+1+1], **envp, **write_argv=argv;
   struct stat stat_data; int rv, n_configs=0, retval=0;
   uid_t uid; gid_t gid;
-  apr_file_t *lockfile, *logfile;
+  apr_file_t *lockfile, *logfile, *launchfile;
   int log_sync=dconfig->log_sync, unlock=0;
 
   if (log_sync<0) log_sync=sconfig->log_sync;
@@ -1390,6 +1392,29 @@ static int start_servlet(request_rec *r,kno_servlet s,
     char *launchconfig=apr_psprintf(p,"LAUNCHER=mod_knocgi");
     *write_argv++=launchconfig;}
 
+  char *launch_text=apr_psprintf(p,"mod_knocgi ");
+  if (launch_text == NULL)
+    ap_log_error(APLOG_MARK,APLOG_ERR,OK,server,
+		 "Couldn't write launch message for %s",
+		 launchname);
+  else {
+    apr_status_t launchfile_status=
+      apr_file_open(&launchfile,launchname,APR_FOPEN_READ|APR_FOPEN_WRITE|APR_FOPEN_CREATE,0,p);
+    if (launchfile_status!=OK)
+      ap_log_error(APLOG_MARK,APLOG_ERR,OK,server,
+		   "Couldn't open launch file %s for contents '%s'",
+		   launchname,launch_text);
+    else {
+      launchfile_status=apr_file_write_full(launchfile,launch_text,strlen(launch_text),0);
+      if (launchfile_status!=OK)
+	ap_log_error(APLOG_MARK,APLOG_ERR,OK,server,
+		     "Couldn't write contents '%s' to %s",
+		     launch_text,launchname);
+      launchfile_status=apr_file_close(launchfile);
+      if (launchfile_status!=OK)
+	ap_log_error(APLOG_MARK,APLOG_ERR,OK,server,
+		     "Couldn't close launch file %s",
+		     launchname);}}
 
   if (server_configs) {
     const char **scan_config=server_configs;
