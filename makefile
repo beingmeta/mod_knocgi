@@ -113,19 +113,19 @@ dist/debian.built: mod_knocgi.c makefile debian debian/changelog
 	touch $@
 
 dist/debian.signed: dist/debian.built
-	debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_*.changes && \
-	touch $@
+	@if test "${GPGID}" = "none" || test -z "${GPGID}"; then  		\
+	  echo "Skipping debian signing";					\
+	  touch $@;								\
+	else 									\
+	  echo debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_*.changes; \
+	  debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_*.changes && 	\
+	  touch $@;								\
+	fi;
 
 deb debs dpkg dpkgs: dist/debian.signed
 
 debinstall: dist/debian.signed
 	sudo dpkg -i ../libapache2-mod-knocgi_*.deb
-
-dist/debian.updated: dist/debian.signed
-	dupload -c ./debian/dupload.conf --nomail --to bionic ../libapache2-mod-knocgi_*.changes && \
-	touch $@
-
-update-apt: dist/debian.updated
 
 debinstall: dist/debian.signed
 	${SUDO} dpkg -i ../libapache2-mod_knocgi*.deb
