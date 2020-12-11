@@ -20,8 +20,7 @@ SUDO         	= $(shell which sudo)
 DEBUG_KNOCGI 	=
 
 KNOCGI_VERSION	::= $(shell cat ./version)
-PATCHLEVEL	::= $(shell u8_gitpatchcount ./version)
-PATCH_VERSION	::= ${KNOCGI_VERSION}-${PATCHLEVEL}
+PATCH_VERSION	::= $(shell u8_gitversion ./version)
 
 
 BINDIR		::= $(shell ${KNOCONFIG} bin)
