@@ -1392,14 +1392,22 @@ static int start_servlet(request_rec *r,kno_servlet s,
     char *launchconfig=apr_psprintf(p,"LAUNCHER=mod_knocgi");
     *write_argv++=launchconfig;}
 
-  char *launch_text=apr_psprintf(p,"mod_knocgi ");
+  char *launch_text=apr_psprintf
+    (p,"mod_knocgi %s %s:%d %s %ld",
+     server->server_hostname,
+     server->defn_name,server->defn_line_number,
+     server->process->short_name,
+     ((long int)getpid()));
   if (launch_text == NULL)
     ap_log_error(APLOG_MARK,APLOG_ERR,OK,server,
 		 "Couldn't write launch message for %s",
 		 launchname);
   else {
     apr_status_t launchfile_status=
-      apr_file_open(&launchfile,launchname,APR_FOPEN_READ|APR_FOPEN_WRITE|APR_FOPEN_CREATE,0,p);
+      apr_file_open(&launchfile,launchname,
+		    APR_FOPEN_READ|APR_FOPEN_WRITE|APR_FOPEN_CREATE|APR_FOPEN_TRUNCATE,
+		    APR_FPROT_UREAD|APR_FPROT_UWRITE|APR_FPROT_GREAD|APR_FPROT_WREAD,
+		    p);
     if (launchfile_status!=OK)
       ap_log_error(APLOG_MARK,APLOG_ERR,OK,server,
 		   "Couldn't open launch file %s for contents '%s'",
