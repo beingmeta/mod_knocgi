@@ -96,8 +96,8 @@ debian: mod_knocgi.c makefile \
 
 debian/changelog: debian mod_knocgi.c makefile
 	cat debian/changelog.base | \
-		u8_debchangelog libapache2-mod-knocgi ${CODENAME} \
-			${REL_BRANCH} ${PATCH_VERSION} ${REL_STATUS} ${REL_PRIORITY} \
+		u8_debchangelog libapache2-mod-knocgi ${CODENAME} ${PATCH_VERSION} \
+			${REL_BRANCH} ${REL_STATUS} ${REL_PRIORITY} \
 	    > $@.tmp
 	if test ! -f debian/changelog; then \
 	  mv debian/changelog.tmp debian/changelog; \
