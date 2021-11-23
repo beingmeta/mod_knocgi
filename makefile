@@ -26,7 +26,6 @@ PATCH_VERSION	::= $(shell u8_gitversion ./version)
 BINDIR		::= $(shell ${KNOCONFIG} bin)
 RUNDIR		::= $(shell ${KNOCONFIG} rundir)
 LOGDIR		::= $(shell ${KNOCONFIG} logdir)
-ADMINGROUP	::= $(shell ${KNOCONFIG} admin_group)
 
 DEFAULT_ARCH    ::= $(shell uname -m)
 ARCH            ::= $(shell ${KNOBUILD} getbuildopt BUILD_ARCH || uname -m)
@@ -51,10 +50,10 @@ ${LIBEXECDIR} ${SYSCONFDIR} ${APXCONF_D}:
 
 knocgi.conf: knocgi.conf.in
 	cp knocgi.conf.in knocgi.conf
-	${KNOBUILD} dosubst knocgi.conf \
-		WEBUSER ${WEBUSER} ADMINGROUP ${ADMINGROUP} \
-		LIBEXECDIR ${LIBEXECDIR} \
-		BINDIR ${BINDIR} RUNDIR ${RUNDIR} LOGDIR ${LOGDIR}
+	$(KNOBUILD) dosubst knocgi.conf \
+		@WEBUSER@ ${WEBUSER} \
+		@LIBEXECDIR@ ${LIBEXECDIR} \
+		@BINDIR@ ${BINDIR} @RUNDIR@ ${RUNDIR} @LOGDIR@ ${LOGDIR}
 
 knocgi.load: knocgi.load.in
 	cp knocgi.load.in knocgi.load
