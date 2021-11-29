@@ -1,7 +1,7 @@
 KNOCONFIG       ::= knoconfig
 KNOBUILD          = knobuild
 
-APXSCMD         ::= $(shell which apxs)
+APXSCMD         ::= $(shell which apxs2 2>/dev/null||which apxs2 2>/dev/null||echo apxs2)
 prefix		::= $(shell ${KNOCONFIG} prefix)
 libsuffix	::= $(shell ${KNOCONFIG} libsuffix)
 WEBUSER 	::= $(shell ${KNOCONFIG} webuser)
@@ -81,54 +81,6 @@ fresh:
 
 gitup gitup-trunk:
 	git checkout trunk && git pull
-
-# Debian packaging
-
-DEBFILES=changelog.base compat control copyright dirs docs install
-
-debian: mod_knocgi.c makefile \
-	dist/debian/rules dist/debian/control \
-	dist/debian/changelog.base
-	rm -rf debian
-	cp -r dist/debian debian
-	cd debian; chmod a-x ${DEBFILES}
-
-debian/changelog: debian mod_knocgi.c makefile
-	cat debian/changelog.base | \
-		u8_debchangelog libapache2-mod-knocgi ${CODENAME} ${PATCH_VERSION} \
-			${REL_BRANCH} ${REL_STATUS} ${REL_PRIORITY} \
-	    > $@.tmp
-	if test ! -f debian/changelog; then \
-	  mv debian/changelog.tmp debian/changelog; \
-	elif diff debian/changelog debian/changelog.tmp 2>&1 > /dev/null; then \
-	  mv debian/changelog.tmp debian/changelog; \
-	else rm debian/changelog.tmp; fi
-
-dist/debian.built: mod_knocgi.c makefile debian debian/changelog
-	dpkg-buildpackage -sa -us -uc -b -rfakeroot && \
-	touch $@
-
-dist/debian.signed: dist/debian.built
-	@if test "${GPGID}" = "none" || test -z "${GPGID}"; then  		\
-	  echo "Skipping debian signing";					\
-	  touch $@;								\
-	else 									\
-	  echo debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_*.changes; \
-	  debsign --re-sign -k${GPGID} ../libapache2-mod-knocgi_*.changes && 	\
-	  touch $@;								\
-	fi;
-
-deb debs dpkg dpkgs: dist/debian.signed
-
-debinstall: dist/debian.signed
-	${SUDO} dpkg -i ../libapache2-mod_knocgi*.deb
-
-debclean: clean
-	rm -rf ../libapache2-mod_knocgi* debian dist/debian.*
-
-debfresh:
-	make debclean
-	make dist/debian.signed
 
 # Alpine packaging
 
